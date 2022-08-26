@@ -1,0 +1,15 @@
+﻿@model List<Album>
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">These are my Albums</h1>
+</div>
+
+<ul>
+    @foreach (var album in @Model)
+    {
+        <li>@album.Name - @album.Year (@album.ArtistName)</li>
+    }
+</ul>

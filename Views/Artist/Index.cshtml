@@ -1,0 +1,16 @@
+﻿@model List<Artist>
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">These are my Artists</h1>
+    <a href="/Artist/Add">Add Artist</a>
+</div>
+
+<ul>
+    @foreach (var artist in @Model.OrderBy(a => a.Name))
+    {
+        <li>@artist.Name</li>
+    }
+</ul>
