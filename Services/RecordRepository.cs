@@ -1,5 +1,8 @@
 using MattsRecords.Models;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using System.Linq;
+
 
 namespace MattsRecords.Services
 {

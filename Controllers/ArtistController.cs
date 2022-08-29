@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MattsRecords.Models;
 using MattsRecords.Services;
-
+using Microsoft.Extensions.Logging;
 
 namespace MattsRecords.Controllers;
 
