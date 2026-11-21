@@ -4,40 +4,53 @@
 
 ## Request flow
 
-Browser → Cloudflare HTTPS route → cloudflared on Windows → Kestrel on Windows loopback → ASP.NET Core MVC → SQL Server.
+```text
+Browser over HTTPS
+    -> Cloudflare published application route
+    -> cloudflared on the Windows host
+    -> Kestrel on http://127.0.0.1:5782
+    -> ASP.NET Core MVC controllers, Razor views, and application services
+    -> SQL Server via EF Core and Microsoft.Data.SqlClient
 
-MusicBrainz and Discogs provide pressing lookups. MailKit sends account email through Namecheap SMTP. A separate Windows scheduled task provisions personal databases.
+Application -> MusicBrainz and Discogs for pressing lookups
+Application -> Namecheap SMTP through MailKit for account mail
+Windows scheduled worker -> SQL Server for personal database provisioning
+```
 
 ## Restored source layout
 
 | Path | Responsibility |
 | --- | --- |
-| MattsRecords.csproj and Program.cs | .NET 10 project, startup, authentication, rate limits, and health checks |
-| Controllers/ | Catalog, record and artist editing, sleeves, registration, and account recovery |
-| Services/ | Catalog queries and writes, search, duplicate matching, lookup, email, and account logic |
-| Models/ | EF Core schema mapping, records, artists, sleeves, and input models |
-| Views/ | Razor pages and shared templates |
-| wwwroot/ | CSS, browser JavaScript, images, and the bundled ZXing camera scanner |
-| database/schema.sql | Catalog schema, indexes, runtime grants, and one-time legacy import |
-| database/accounts.sql | Account registry, email confirmation, and recovery procedures |
-| deploy/ | Windows installation, launch, provisioning, Cloudflare connector, and SMTP setup |
+| `MattsRecords.csproj`, `Program.cs` | .NET 10 project, dependency injection, request pipeline, authentication, rate limits, and readiness checks |
+| `Controllers/` | Public catalog, record and artist editing, sleeve images, registration, and account recovery |
+| `Services/RecordRepository.cs` | Catalog reads, writes, and duplicate review during save |
+| `Services/CatalogSearch.cs`, `DuplicateRecords.cs` | Search and duplicate matching |
+| `Services/PressingLookup.cs`, `DiscogsLookup.cs`, `RecordBarcode.cs` | Pressing lookup, identifiers, and barcode normalization |
+| `Services/CollectionAccounts.cs`, `AccountEmail.cs`, `AccountRecovery.cs`, `AccountMail.cs` | Account database selection, email verification, password resets, and mail delivery |
+| `Models/RecordContext.cs`, `Models/` | EF Core table mappings and data models for records, artists, sleeve photos, and forms |
+| `Views/`, `wwwroot/` | Razor templates, styling, browser scripts, and bundled ZXing barcode scanner |
+| `database/schema.sql` | Catalog tables, indexes, runtime permissions, and one-time legacy import |
+| `database/accounts.sql` | Account registry, verification tokens, recovery queue, and stored procedures in the owner database |
+| `deploy/` | Install, launch, provision personal databases, connect Cloudflare, and configure account email |
 
-## SQL storage
+## Catalog and account storage
 
 | SQL object | Contents |
 | --- | --- |
-| dbo.RecordSiteArtist | Artists linked to releases |
-| dbo.RecordSiteRelease | Release types, titles, credits, pressing metadata, artwork URLs, sleeve references, and dates added |
-| dbo.RecordSiteSleeve | Front and rear JPEGs keyed by record and side |
-| dbo.RecordSiteLegacyImport | One-time import marker and counts |
-| dbo.RecordSiteAccount | Usernames, password hashes, verified addresses, and provisioning state |
-| dbo.RecordSiteEmailChange and dbo.RecordSiteRecovery | Pending verification and reset requests with hashed tokens and expiry |
+| `dbo.RecordSiteArtist` | Artist names linked to releases |
+| `dbo.RecordSiteRelease` | Title, artist credit, release type and year, pressing metadata, identifiers, cover URL, sleeve references, and date added |
+| `dbo.RecordSiteSleeve` | Front and rear images stored as JPEG bytes, keyed by record and side |
+| `dbo.RecordSiteLegacyImport` | One-time migration marker and imported record counts |
+| `dbo.RecordSiteAccount` | Personal usernames, password hashes, verified email addresses, and provisioning state |
+| `dbo.RecordSiteEmailChange`, `dbo.RecordSiteRecovery` | Pending email verification and reset requests with hashed tokens and expiry |
 
-MattVinyl serves the public collection and stores the account registry. Initial provisioning imports the legacy Artist, Album, Single, and Compilation tables where present. Each personal collection uses the shared catalog schema in its own MattsRecords_User_<account GUID without hyphens> database. The signed-in account determines the database used for browsing, edits, exports, and image requests.
+The owner database, `MattVinyl`, serves the public catalog and stores the account registry. Initial provisioning imports the legacy `Artist`, `Album`, `Single`, and `Compilation` tables into the application catalog where those source tables exist. Subsequent edits use the application tables.
 
-## Workflows
+Each personal catalog uses the same catalog schema in a database named `MattsRecords_User_<account GUID without hyphens>`. The authenticated account determines the active database for reads, edits, exports, and image requests. Personal catalog rows are separate from the public collection.
 
-1. Registration collects a username, email address, and password. Confirmation links expire after 24 hours. The scheduled worker provisions the personal database after confirmation.
-2. Forgot password takes a username and queues mail to the verified address. The reset link expires in 30 minutes, can be used once, and changing the password invalidates old sessions. Existing users can verify an address under **Manage → Account settings**.
-3. Barcode scanning needs HTTPS and camera permission. Manual barcode entry remains available. Review the lookup results and possible duplicates before saving a record.
-4. Uploaded front sleeves take precedence in the cover grid. The application stores resized JPEGs in SQL Server after removing source image metadata.
+## Account and record workflows
+
+1. Registration captures a username, email address, and password. A 24-hour email link confirms the address. Confirmation queues personal database creation. The provisioner runs once a minute, and the website shows a setup page until the database is ready.
+2. **Forgot password** accepts the username. The application queues an email to the verified address. The reset link expires after 30 minutes and can be redeemed once. Changing the password invalidates old sessions. Existing personal users can verify an address in **Manage → Account settings**.
+3. Barcode scanning requires camera permission and a secure browser origin. Manual entry remains available. Lookup results can prefill the edit form and cover metadata. The user reviews the details and any duplicate matches before saving.
+4. An uploaded front sleeve takes precedence in the cover grid. Remote cover art remains a URL. Uploaded photos are resized, converted to JPEG, and saved in SQL Server without the source image metadata.
