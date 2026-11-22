@@ -1,0 +1,16 @@
+@model RecoveryRequestForm
+@{
+    ViewData["Title"] = "Forgot password";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Forgot password?</h1>
+        <p>Enter your username to request a password reset link.</p>
+        <form asp-action="Forgot" method="post" class="edit-form">
+            <div asp-validation-summary="All" class="validation"></div>
+            <div><label asp-for="Username"></label><input asp-for="Username" autocomplete="username" maxlength="32" required></div>
+            <button class="button button-accent" type="submit">Request a reset link</button>
+        </form>
+        <p><a asp-controller="Admin" asp-action="Login">Back to sign-in</a></p>
+    </div>
+</section>

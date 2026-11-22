@@ -1,0 +1,18 @@
+@model ResetPasswordForm
+@{
+    ViewData["Title"] = "Reset password";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Reset password</h1>
+        <p>Choose a new password with at least 12 characters.</p>
+        <form asp-action="Reset" method="post" class="edit-form">
+            <input asp-for="Token" type="hidden" data-recovery-token>
+            <div asp-validation-summary="All" class="validation"></div>
+            <div><label asp-for="Password"></label><input asp-for="Password" autocomplete="new-password" minlength="12" maxlength="256" required></div>
+            <div><label asp-for="Confirmation"></label><input asp-for="Confirmation" autocomplete="new-password" maxlength="256" required></div>
+            <button class="button button-accent" type="submit">Save new password</button>
+        </form>
+        <p><a asp-action="Forgot">Request a new reset link</a></p>
+    </div>
+</section>

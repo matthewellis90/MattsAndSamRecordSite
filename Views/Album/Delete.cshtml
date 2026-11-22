@@ -1,0 +1,21 @@
+@model DeleteForm
+@{
+    var isArtist = Model.Entity == "artist";
+    ViewData["Title"] = $"Remove {Model.Entity}";
+    var cancel = isArtist ? Url.Action("Index", "Artist") : Url.Action("Details", "Album", new { id = Model.Id });
+}
+<section class="shell content-page">
+    <div class="form-panel">
+        <h1>Remove @Model.Entity?</h1>
+        <p>Remove <strong>@Model.Name</strong> from the collection.</p>
+        @if (isArtist)
+        {
+            <p>Move or remove the artist’s records first.</p>
+        }
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="actions">
+            <input type="hidden" name="version" value="@Model.Version">
+            <button class="button button-danger button-danger-solid">Remove @Model.Entity</button>
+            <a class="button" href="@cancel">Cancel</a>
+        </form>
+    </div>
+</section>

@@ -1,0 +1,18 @@
+@model bool
+@{
+    ViewData["Title"] = "Reset request";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Reset request</h1>
+        @if (Model)
+        {
+            <p>Check the inbox and spam folder of your verified email address. If you haven’t added an address or the email doesn’t arrive, ask the site owner for help.</p>
+        }
+        else
+        {
+            <p>If the username belongs to an account, the request appears in the site owner’s queue. Ask the site owner to share the reset link privately.</p>
+        }
+        <p><a asp-controller="Admin" asp-action="Login">Back to sign-in</a></p>
+    </div>
+</section>

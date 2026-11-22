@@ -1,16 +1,47 @@
-﻿@model List<Artist>
+@model ArtistsView
 @{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Artists";
+    var isOwner = User.Identity?.IsAuthenticated == true;
 }
-
-<div class="text-center">
-    <h1 class="display-4">These are my Artists</h1>
-    <a href="/Artist/Add">Add Artist</a>
-</div>
-
-<ul>
-    @foreach (var artist in @Model.OrderBy(a => a.Name))
+<section class="shell content-page">
+    <div class="section-head">
+        <h1>Artists</h1>
+        @if (isOwner)
+        {
+            <a class="button button-accent" asp-action="Add">Add an artist</a>
+        }
+    </div>
+    <form class="artist-search" asp-action="Index" method="get">
+        <div><label for="artist-search">Search artists</label><input type="search" name="search" id="artist-search" value="@Model.Search" maxlength="200"></div>
+        <button class="button button-solid">Search</button>
+    </form>
+    <div class="results-info">
+        <p>@Model.Artists.Count @(Model.Artists.Count == 1 ? "artist" : "artists")</p>
+        @if (!string.IsNullOrWhiteSpace(Model.Search))
+        {
+            <a asp-action="Index">Clear search</a>
+        }
+    </div>
+    @if (Model.Artists.Count == 0)
     {
-        <li>@artist.Name</li>
+        <div class="empty"><h2>No artists found</h2></div>
     }
-</ul>
+    else
+    {
+        <ul class="artist-list">
+            @foreach (var artist in Model.Artists)
+            {
+                <li>
+                    <div>
+                        <h2><a asp-controller="Home" asp-action="Index" asp-route-artistId="@artist.Id" asp-fragment="collection">@artist.Name</a></h2>
+                        <p>@artist.RecordCount @(artist.RecordCount == 1 ? "record" : "records")</p>
+                    </div>
+                    @if (isOwner)
+                    {
+                        <a class="button" aria-label="Edit @artist.Name" asp-action="Edit" asp-route-id="@artist.Id">Edit</a>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</section>

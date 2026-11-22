@@ -1,0 +1,19 @@
+@model RegistrationForm
+@{
+    ViewData["Title"] = "Create an account";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Create an account</h1>
+        <p>Confirm your email address to start your private record collection.</p>
+        <form asp-action="Register" method="post" class="edit-form">
+            <div asp-validation-summary="All" class="validation"></div>
+            <div><label asp-for="Username"></label><input asp-for="Username" autocomplete="username" minlength="3" maxlength="32" required></div>
+            <div><label asp-for="Email"></label><input asp-for="Email" type="email" autocomplete="email" maxlength="254" required></div>
+            <div><label asp-for="Password"></label><input asp-for="Password" autocomplete="new-password" minlength="12" maxlength="256" required></div>
+            <div><label asp-for="Confirmation"></label><input asp-for="Confirmation" type="password" autocomplete="new-password" maxlength="256" required></div>
+            <button class="button button-accent" type="submit">Create my collection</button>
+        </form>
+        <p><a asp-action="Login">Sign in to an existing account</a></p>
+    </div>
+</section>

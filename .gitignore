@@ -361,3 +361,13 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Record Room local settings and deployment state
+.env
+.env.*
+appsettings.Local.json
+run-settings.json
+provision-settings.json
+mail-settings.json
+current-release.txt
+*.bak

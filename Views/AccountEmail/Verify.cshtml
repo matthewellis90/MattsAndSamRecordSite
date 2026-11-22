@@ -1,0 +1,14 @@
+@model ConfirmEmailForm
+@{
+    ViewData["Title"] = "Verify email";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Verify your email address</h1>
+        <form asp-action="Verify" method="post" class="edit-form">
+            <input asp-for="Token" type="hidden" data-recovery-token>
+            <div asp-validation-summary="All" class="validation"></div>
+            <button class="button button-accent" type="submit">Verify email address</button>
+        </form>
+    </div>
+</section>

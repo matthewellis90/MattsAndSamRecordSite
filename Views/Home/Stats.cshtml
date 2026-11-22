@@ -1,0 +1,78 @@
+@model IReadOnlyList<Album>
+@{
+    ViewData["Title"] = "Collection stats";
+    var decades = Model.Where(record => record.Year >= 1000).GroupBy(record => record.Year!.Value / 10 * 10)
+        .OrderBy(group => group.Key).ToArray();
+    var formats = Model.Where(record => record.HasVinylFormatDetails).GroupBy(record => record.Format!.Trim(),
+        StringComparer.OrdinalIgnoreCase).OrderByDescending(group => group.Count())
+        .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase).ToArray();
+    var releaseTypes = Model.GroupBy(record => record.Kind).OrderBy(group => group.Key).ToArray();
+    var missingFormats = Model.Count(record => !record.HasVinylFormatDetails);
+    var canReviewFormats = missingFormats > 0 && User.Identity?.IsAuthenticated == true;
+    var artists = Model.Where(record => record.ArtistId.HasValue).GroupBy(record => record.ArtistId!.Value)
+        .OrderByDescending(group => group.Count()).ThenBy(group => group.First().DisplayArtist).Take(10).ToArray();
+}
+<section class="shell content-page">
+    <div class="section-head"><h1>Collection stats</h1></div>
+    <p>@Model.Count records · @Model.Count(record => record.HasCover) with cover art</p>
+    <div class="stats-grid">
+        <section>
+            <h2>By decade</h2>
+            <ul class="stats-list">
+                @foreach (var decade in decades)
+                {
+                    <li><a asp-action="Index" asp-route-decade="@decade.Key" asp-fragment="collection">@(decade.Key)s</a><span>@decade.Count()</span></li>
+                }
+                <li>Year unknown <span>@Model.Count(record => record.Year is null or < 1000)</span></li>
+            </ul>
+        </section>
+        <section>
+            <h2>By format</h2>
+            <h3 class="stats-subheading">Release type</h3>
+            @if (releaseTypes.Length == 0)
+            {
+                <p>No records yet.</p>
+            }
+            else
+            {
+                <ul class="stats-list">
+                    @foreach (var type in releaseTypes)
+                    {
+                        <li><a asp-action="Index" asp-route-kind="@type.Key" asp-fragment="collection">@type.Key</a><span>@type.Count()</span></li>
+                    }
+                </ul>
+            }
+            <h3 class="stats-subheading">Physical format</h3>
+            <ul class="stats-list">
+                <li><a asp-action="Index" asp-route-format="@Album.VinylFormat" asp-fragment="collection">Vinyl</a><span>@Model.Count</span></li>
+            </ul>
+            @if (formats.Length > 0 || canReviewFormats)
+            {
+                <h3 class="stats-subheading">Vinyl format details</h3>
+                <ul class="stats-list">
+                    @foreach (var format in formats)
+                    {
+                        <li><a asp-action="Index" asp-route-format="@format.Key" asp-fragment="collection">@format.Key</a><span>@format.Count()</span></li>
+                    }
+                    @if (canReviewFormats)
+                    {
+                        <li><a asp-controller="CollectionTools" asp-action="Index" asp-route-queue="format">Missing vinyl details</a><span>@missingFormats</span></li>
+                    }
+                    else if (missingFormats > 0)
+                    {
+                        <li><a asp-action="Index" asp-route-format="@RecordQuery.UnrecordedFormat" asp-fragment="collection">Details not recorded</a><span>@missingFormats</span></li>
+                    }
+                </ul>
+            }
+        </section>
+        <section>
+            <h2>Most collected artists</h2>
+            <ul class="stats-list">
+                @foreach (var artist in artists)
+                {
+                    <li><a asp-action="Index" asp-route-artistId="@artist.Key" asp-fragment="collection">@artist.First().DisplayArtist</a><span>@artist.Count()</span></li>
+                }
+            </ul>
+        </section>
+    </div>
+</section>
