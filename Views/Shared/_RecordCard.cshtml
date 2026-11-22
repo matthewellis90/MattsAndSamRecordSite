@@ -1,0 +1,13 @@
+@model Album
+<li>
+    <article class="record-card">
+        <a asp-controller="Album" asp-action="Details" asp-route-id="@Model.Id" class="card-link">
+            <partial name="_RecordArt" model="Model" />
+            <div class="card-copy">
+                <p class="record-type">@Model.Kind</p>
+                <h3>@Model.Name</h3>
+                <p>@Model.DisplayArtist @if (Model.Year is int year && year > 0) { <span aria-hidden="true">·</span> @year }</p>
+            </div>
+        </a>
+    </article>
+</li>

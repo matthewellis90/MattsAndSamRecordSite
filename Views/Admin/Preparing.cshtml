@@ -1,0 +1,25 @@
+@model bool
+@{
+    ViewData["Title"] = "Set up your collection";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        @if (CollectionSession.NeedsEmailConfirmation(User))
+        {
+            <h1>Confirm your email address</h1>
+            <p>Open the link in your confirmation email to start setting up your collection.</p>
+            <a class="button" asp-controller="AccountEmail" asp-action="Index">Resend confirmation or change email address</a>
+        }
+        else if (Model)
+        {
+            <h1>Collection setup paused</h1>
+            <p>Your account was created. Contact the site owner to finish preparing your collection.</p>
+        }
+        else
+        {
+            <h1>Preparing your collection</h1>
+            <p data-account-preparing>The site is creating your blank catalog. This page will check again automatically.</p>
+            <a class="button" asp-action="Preparing">Check now</a>
+        }
+    </div>
+</section>

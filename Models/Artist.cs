@@ -1,8 +1,8 @@
-namespace MattsRecords.Models
+namespace MattsRecords.Models;
+
+public sealed class Artist
 {
-    public class Artist
-    {
-        public int Id {get;set;}
-        public string Name {get;set;} = "Matthew Ellis";
-    }
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public byte[] RowVersion { get; set; } = [];
 }

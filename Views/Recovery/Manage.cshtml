@@ -1,0 +1,42 @@
+@model RecoveryQueue
+@{
+    ViewData["Title"] = "Account recovery";
+}
+<section class="shell content-page">
+    <a class="back-link" asp-controller="CollectionTools" asp-action="Index">Manage the collection</a>
+    <div class="form-panel">
+        <h1>Account recovery</h1>
+        @if (Model.Link is { } link)
+        {
+            <div class="edit-form">
+                <p role="status">Reset link for <strong>@Model.Username</strong>. Share it privately with the account holder. It expires in 30 minutes.</p>
+                <div><label for="recovery-link">Reset link</label><input id="recovery-link" type="url" readonly value="@link"></div>
+            </div>
+        }
+        @if (Model.Requests.Count == 0)
+        {
+            <p>There are no password reset requests.</p>
+        }
+        else
+        {
+            <ul class="artist-list review-list">
+                @foreach (var request in Model.Requests)
+                {
+                    <li>
+                        <div>
+                            <h3>@request.Username</h3>
+                            @if (request.HasActiveLink)
+                            {
+                                <p>Reset link active</p>
+                            }
+                        </div>
+                        <form asp-action="Issue" method="post">
+                            <input type="hidden" name="accountId" value="@request.AccountId">
+                            <button class="button button-solid" type="submit">@(request.HasActiveLink ? "Replace link" : "Generate link")</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</section>

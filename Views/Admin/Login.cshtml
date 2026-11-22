@@ -1,0 +1,19 @@
+@model LoginForm
+@{
+    ViewData["Title"] = "Sign in";
+}
+<section class="shell content-page">
+    <div class="form-panel form-narrow">
+        <h1>Sign in</h1>
+        <p>Sign in to manage your collection.</p>
+        <form asp-action="Login" method="post" class="edit-form">
+            <input asp-for="ReturnUrl" type="hidden">
+            <div asp-validation-summary="All" class="validation"></div>
+            <div><label asp-for="Username"></label><input asp-for="Username" autocomplete="username" required></div>
+            <div><label asp-for="Password"></label><input asp-for="Password" type="password" autocomplete="current-password" required></div>
+            <button class="button button-accent" type="submit">Sign in</button>
+        </form>
+        <p><a asp-controller="Recovery" asp-action="Forgot">Forgot password?</a></p>
+        <p><a asp-action="Register">Create an account</a></p>
+    </div>
+</section>

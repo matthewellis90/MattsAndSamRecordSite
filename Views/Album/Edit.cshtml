@@ -1,0 +1,124 @@
+@model RecordForm
+@{
+    ViewData["Title"] = !Model.Id.HasValue ? "Add a record" : "Edit record";
+    var artists = new SelectList(Model.Artists, nameof(ArtistSummary.Id), nameof(ArtistSummary.Name), Model.ArtistId);
+    var cancel = !Model.Id.HasValue ? Url.Action("Index", "Home") : Url.Action("Details", "Album", new { id = Model.Id });
+}
+<section class="shell content-page">
+    <a class="back-link" href="@cancel">@(!Model.Id.HasValue ? "Collection" : "Record details")</a>
+    <div class="form-panel">
+        <h1>@ViewData["Title"]</h1>
+        <section class="lookup-panel" aria-labelledby="pressing-lookup-title" data-lookup="@Url.Action("Lookup", "Album")"
+                 data-lookup-details="@Url.Action("LookupDetails", "Album")"
+                 data-existing-record="@Url.Action("Details", "Album", new { id = 0 })">
+            <h2 id="pressing-lookup-title">Find a pressing</h2>
+            @if (!Model.Id.HasValue)
+            {
+                <div class="barcode-scanner" data-barcode-scanner>
+                    <button type="button" class="button button-accent" id="scan-start">Scan barcode</button>
+                    <div id="scan-camera" hidden>
+                        <video id="scan-preview" playsinline muted aria-label="Barcode scanner camera preview"></video>
+                    </div>
+                    <p class="field-hint" id="scan-status" role="status"></p>
+                </div>
+            }
+            <div class="field-pair">
+                <div><label for="lookup-field">Look up by</label><select id="lookup-field"><option value="Title">Title or MusicBrainz link</option><option value="Barcode">Barcode</option><option value="Catalogue">Catalogue number</option></select></div>
+                <div><label for="lookup-term">Search value</label><input type="search" id="lookup-term" maxlength="200"></div>
+            </div>
+            <div><label for="lookup-artist">Artist (optional)</label><input type="text" id="lookup-artist" maxlength="100"></div>
+            <button type="button" class="button button-solid" id="lookup-submit">Search pressings</button>
+            <p class="field-hint" id="lookup-status" role="status"></p>
+            <p class="field-hint" id="lookup-source" hidden></p>
+            <div class="duplicate-warning" id="lookup-duplicates" role="status" hidden></div>
+            <ul class="lookup-results" id="lookup-results"></ul>
+        </section>
+        <form asp-action="Save" method="post" class="edit-form">
+            <input asp-for="Id" type="hidden">
+            <input asp-for="Version" type="hidden">
+            <div asp-validation-summary="All" class="validation"></div>
+            <div><label asp-for="Name"></label><input asp-for="Name" maxlength="200" required></div>
+            <div class="field-pair">
+                <div><label asp-for="Kind"></label><select asp-for="Kind" asp-items="Html.GetEnumSelectList<RecordKind>()"></select></div>
+                <div><label asp-for="Year"></label><input asp-for="Year" inputmode="numeric" min="0" max="9999"></div>
+            </div>
+            <div>
+                <label asp-for="ArtistId"></label>
+                <select asp-for="ArtistId" asp-items="artists" aria-describedby="artist-hint"><option value="">Select an artist</option></select>
+                <p class="field-hint" id="artist-hint">
+                    An artist is optional for compilations.
+                    @if (Model.Id.HasValue)
+                    {
+                        <a asp-controller="Artist" asp-action="Add" target="_blank" rel="noopener">Add a missing artist in a new tab</a>
+                    }
+                </p>
+            </div>
+            @if (!Model.Id.HasValue)
+            {
+                <div>
+                    <label asp-for="NewArtistName"></label>
+                    <input asp-for="NewArtistName" maxlength="200" aria-describedby="new-artist-hint">
+                    <p class="field-hint" id="new-artist-hint">Use this field if the artist is missing from the list.</p>
+                </div>
+            }
+            <div><label asp-for="Format"></label><input asp-for="Format" maxlength="100" placeholder="e.g. 12-inch vinyl"></div>
+            <div>
+                <label asp-for="CoverUrl"></label><input asp-for="CoverUrl" type="url" maxlength="2048" placeholder="https://">
+                <img id="lookup-cover" class="lookup-cover" alt="Proposed cover art" hidden>
+            </div>
+            <fieldset class="pressing-fields">
+                <legend>Pressing details</legend>
+                <div class="field-pair">
+                    <div><label asp-for="Label"></label><input asp-for="Label" maxlength="100"></div>
+                    <div><label asp-for="Genre"></label><input asp-for="Genre" maxlength="80"></div>
+                    <div><label asp-for="Country"></label><input asp-for="Country" maxlength="80"></div>
+                    <div><label asp-for="PressingYear"></label><input asp-for="PressingYear" min="1000" max="9999"></div>
+                    <div><label asp-for="CatalogNumber"></label><input asp-for="CatalogNumber" maxlength="100"></div>
+                    <div><label asp-for="Barcode"></label><input asp-for="Barcode" maxlength="32" inputmode="numeric"></div>
+                    <div><label asp-for="MusicBrainzId"></label><input asp-for="MusicBrainzId"></div>
+                    <div><label asp-for="DiscogsId"></label><input asp-for="DiscogsId" min="1"></div>
+                </div>
+            </fieldset>
+            <div><label asp-for="Notes"></label><textarea asp-for="Notes" rows="5" maxlength="2000"></textarea></div>
+            @if (Model.Review is { } review)
+            {
+                <input type="hidden" name="DuplicateReviewKey" value="@review.Key">
+                <fieldset class="duplicate-warning" aria-describedby="duplicate-review-hint">
+                    <legend>This record may already be in your collection</legend>
+                    <p id="duplicate-review-hint">Updating an entry replaces pressing details where this form has a value. Its title, artist, cover, sleeve photos, and existing notes are kept. Choose <strong>Add another copy</strong> to keep both entries.</p>
+                    <ul class="lookup-results">
+                        @foreach (var match in review.Matches)
+                        {
+                            <li>
+                                <a asp-action="Details" asp-route-id="@match.Id" target="_blank" rel="noopener">@match.Title · @match.Artist</a>
+                                <p class="field-hint">@string.Join(" · ", new[] { match.Reason, match.CatalogueNumber, match.Country, match.PressingYear?.ToString(), match.Format }.Where(value => !string.IsNullOrWhiteSpace(value)))</p>
+                                <label class="checkbox"><input type="radio" name="DuplicateAction" value="update-@match.Id" required autofocus="@(match == review.Matches[0])"
+                                        aria-label="Update this entry, @match.Title by @match.Artist, record @match.Id"> Update this entry</label>
+                            </li>
+                        }
+                    </ul>
+                    <label class="checkbox"><input type="radio" name="DuplicateAction" value="copy" required> Add another copy</label>
+                </fieldset>
+            }
+            <div class="actions">
+                @if (Model.Review is null)
+                {
+                    <button class="button button-accent">Save record</button>
+                }
+                else
+                {
+                    <button class="button button-accent" type="submit">Confirm and save</button>
+                }
+                <a class="button" href="@cancel">Cancel</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+@section Scripts {
+    @if (!Model.Id.HasValue)
+    {
+        <script src="~/lib/zxing/zxing-browser.min.js" asp-append-version="true" defer></script>
+        <script src="~/js/barcode-scanner.js" asp-append-version="true" defer></script>
+    }
+}

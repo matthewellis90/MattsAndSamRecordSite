@@ -1,0 +1,12 @@
+@model Album
+<div class="record-art record-art-@(Model.Id % 5)" aria-hidden="true">
+    <span class="vinyl"></span>
+    @if (Model.FrontSleeveKey is Guid front)
+    {
+        <img class="record-cover" src="@Url.RouteUrl("SleeveImage", new { id = Model.Id, side = 0, revision = front })" alt="" loading="lazy" decoding="async">
+    }
+    else if (CatalogValidation.IsCoverUrl(Model.CoverUrl))
+    {
+        <img class="record-cover" src="@Model.CoverUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+    }
+</div>

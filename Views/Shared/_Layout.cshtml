@@ -1,51 +1,70 @@
-﻿<!DOCTYPE html>
+@{
+    var controller = ViewContext.RouteData.Values["controller"] as string;
+    var isArtist = controller == "Artist";
+    var isCatalog = controller is "Home" or "Album" && (string)ViewContext.RouteData.Values["action"]! != "Privacy";
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - MattsRecords</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Browse vinyl albums, singles and compilations, or create your own private record collection.">
+    <meta name="theme-color" content="#181612">
+    <title>@(ViewData["Title"] is string title ? $"{title} | {SiteBrand.Name}" : SiteBrand.Name)</title>
+    <link rel="icon" type="image/png" href="~/images/record-icon.png">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true">
+    <script src="~/js/site.js" asp-append-version="true" defer></script>
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">MattsRecords</a>
-                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Artist" asp-action="Index">Artists</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Album" asp-action="Index">Albums</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="shell masthead">
+            <a class="brand" asp-controller="Home" asp-action="Index">
+                <span class="brand-disc" aria-hidden="true"></span>
+                <span>@SiteBrand.Name</span>
+            </a>
+            <nav aria-label="Main navigation" class="site-nav">
+                <a class="nav-link" aria-current="@(isCatalog ? "page" : null)" asp-controller="Home" asp-action="Index">Collection</a>
+                <a class="nav-link" aria-current="@(isArtist ? "page" : null)" asp-controller="Artist" asp-action="Index">Artists</a>
+                <a class="nav-link" asp-controller="Home" asp-action="Stats">Stats</a>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a class="nav-link" asp-controller="CollectionTools" asp-action="Index">Manage</a>
+                    <form class="inline-form" asp-controller="Admin" asp-action="Logout" method="post">
+                        <button class="nav-link signin" type="submit">Sign out</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="nav-link signin" asp-controller="Admin" asp-action="Login">Sign in</a>
+                    <a class="nav-link" asp-controller="Admin" asp-action="Register">Create account</a>
+                }
+            </nav>
+        </div>
+        <div class="shell header-search">
+            <form asp-controller="Home" asp-action="Index" asp-fragment="collection" method="get" role="search" aria-label="Search the record collection">
+                <label class="visually-hidden" for="global-search">Search records</label>
+                <input type="search" id="global-search" name="search" value="@Context.Request.Query["search"]"
+                       maxlength="200" placeholder="Search titles, artists, years…" autocomplete="off"
+                       data-suggest="@Url.Action("Suggest", "Home")" aria-controls="record-suggestions">
+                <button type="submit" class="button button-solid">Search</button>
+                <ul id="record-suggestions" class="suggestions" aria-label="Matching records" hidden></ul>
+            </form>
+        </div>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2022 - MattsRecords - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+    <main id="main">
+        @if (TempData["Status"] is string status)
+        {
+            <div class="shell"><p class="status" role="status">@status</p></div>
+        }
+        @RenderBody()
+    </main>
+    <footer class="site-footer">
+        <div class="shell footer-inner">
+            <a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-disc" aria-hidden="true"></span> @SiteBrand.Name</a>
+            <a class="quiet-link" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

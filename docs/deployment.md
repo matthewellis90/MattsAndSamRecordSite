@@ -36,10 +36,10 @@ Run the installer from an elevated Windows PowerShell session. Use a unique owne
 
 ```powershell
 $ownerPassword = Read-Host 'Owner password' -AsSecureString
-& .\deploy\Install-Windows.ps1 -PublishedDirectory .\publish -AdminPassword $ownerPassword
+& .\deploy\Install-Windows.ps1 -PublishedDirectory .\publish -PublicHost records.example.com -AdminPassword $ownerPassword
 ```
 
-The default owner username is `admin`. The installer defaults to the local default SQL instance, `MattVinyl`, and port 5782. Use `-SqlServer`, `-DatabaseName`, `-PublicHost`, and `-Port` when targeting a different installation. On routine updates, omit `-AdminPassword` to reuse the installed owner hash. Supply the same host and SQL parameters used for the installation.
+The default owner username is `admin`. The installer defaults to the local default SQL instance, `MattVinyl`, and port 5782. Supply your public hostname on the first installation. Updates reuse the installed hostname and owner password hash when those parameters are omitted. Supply the same SQL server, database, and port parameters if your installation uses custom values.
 
 The installer applies the schemas, deploys a versioned release, registers the site as a Local Service task, and registers the Local System worker for personal collections. It checks that the application can read the catalog. Ready personal databases receive schema updates during installation.
 
@@ -58,6 +58,6 @@ Use your actual public hostname in the second check. Open the public HTTPS URL i
 
 In Namecheap Private Email, enable third-party SMTP access and create an app password for the sender mailbox. In Cloudflare DNS, publish the mailbox provider's MX, SPF and DKIM records. If SPF already exists, include all authorized senders in a single policy. The existing setup started with `v=DMARC1; p=none` at `_dmarc` while testing delivery. [Namecheap SMTP settings](https://www.namecheap.com/support/knowledgebase/article.aspx/1179/2175/general-private-email-configuration-for-mail-clients-and-mobile-devices/), [Namecheap app passwords](https://www.namecheap.com/support/knowledgebase/article.aspx/10816/2178/how-to-use-app-passwords-for-private-email/)
 
-With the site installed, run `Configure The Record Room Email.cmd` as administrator. Use `mail.privateemail.com`, port `587` with STARTTLS, and the full mailbox address for both From and the SMTP username. Enter the app password at the masked Windows prompt. Namecheap also supports port `465` with implicit TLS. Other configured ports use STARTTLS. The existing deployment's combined email installer supplies its mailbox defaults.
+With the site installed, run `Configure The Record Room Email.cmd` as administrator. Use `mail.privateemail.com`, port `587` with STARTTLS, and the full mailbox address for both From and the SMTP username. Enter the app password at the masked Windows prompt. Namecheap also supports port `465` with implicit TLS. Other configured ports use STARTTLS. The combined email installer supplies the Namecheap host and port and prompts for the mailbox address and app password.
 
 Windows DPAPI protects the stored SMTP password. The site constructs account links with the public HTTPS hostname from the deployment settings. Once the installer reports **Ready**, use an address you control to test sign-up confirmation and password reset from the public site. The readiness endpoint checks the SQL catalog. Inbox delivery requires this separate test.

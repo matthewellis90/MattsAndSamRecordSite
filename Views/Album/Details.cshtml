@@ -1,0 +1,70 @@
+@model Album
+@{
+    ViewData["Title"] = Model.Name;
+}
+<section class="shell content-page">
+    <a class="back-link" asp-controller="Home" asp-action="Index" asp-fragment="collection">Collection</a>
+    <article class="record-detail">
+        <partial name="_RecordArt" model="Model" />
+        <div class="detail-copy">
+            <p class="eyebrow">@Model.Kind</p>
+            <h1>@Model.Name</h1>
+            @if (Model.ArtistId is int artistId)
+            {
+                <p class="detail-artist"><a asp-controller="Home" asp-action="Index" asp-route-artistId="@artistId" asp-fragment="collection">@Model.DisplayArtist</a></p>
+            }
+            else
+            {
+                <p class="detail-artist">@Model.DisplayArtist</p>
+            }
+            @if (Model.Year > 0 || !string.IsNullOrWhiteSpace(Model.Format) || Model.PressingYear.HasValue || Model.Label != null || Model.Genre != null || Model.Country != null || Model.CatalogNumber != null || Model.Barcode != null)
+            {
+                <dl class="metadata">
+                    @if (Model.Year > 0)
+                    {
+                        <div><dt>Released</dt><dd>@Model.Year</dd></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Model.Format))
+                    {
+                        <div><dt>Format</dt><dd>@Model.Format</dd></div>
+                    }
+                    @if (Model.PressingYear.HasValue) { <div><dt>Pressing year</dt><dd>@Model.PressingYear</dd></div> }
+                    @if (Model.Label != null) { <div><dt>Label</dt><dd>@Model.Label</dd></div> }
+                    @if (Model.Genre != null) { <div><dt>Genre</dt><dd>@Model.Genre</dd></div> }
+                    @if (Model.Country != null) { <div><dt>Pressing country</dt><dd>@Model.Country</dd></div> }
+                    @if (Model.CatalogNumber != null) { <div><dt>Catalogue number</dt><dd>@Model.CatalogNumber</dd></div> }
+                    @if (Model.Barcode != null) { <div><dt>Barcode</dt><dd>@Model.Barcode</dd></div> }
+                </dl>
+            }
+            @if (Model.MusicBrainzId.HasValue)
+            {
+                <p><a href="https://musicbrainz.org/release/@Model.MusicBrainzId">This pressing on MusicBrainz</a></p>
+            }
+            @if (Model.DiscogsId is int discogsId)
+            {
+                <p><a href="https://www.discogs.com/release/@discogsId">Data provided by Discogs.</a></p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.Notes))
+            {
+                <h2>Notes</h2>
+                <p class="notes">@Model.Notes</p>
+            }
+            @if (Model.BackSleeveKey is Guid back)
+            {
+                <figure class="back-sleeve">
+                    <figcaption>Back sleeve</figcaption>
+                    <img src="@Url.RouteUrl("SleeveImage", new { id = Model.Id, side = 1, revision = back })"
+                         alt="Back sleeve of @Model.Name" loading="lazy" decoding="async">
+                </figure>
+            }
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <div class="actions">
+                    <a class="button button-accent" asp-action="Edit" asp-route-id="@Model.Id">Edit record</a>
+                    <a class="button" asp-controller="Sleeve" asp-action="Edit" asp-route-id="@Model.Id">Sleeves and review</a>
+                    <a class="button button-danger" asp-action="Delete" asp-route-id="@Model.Id">Remove record</a>
+                </div>
+            }
+        </div>
+    </article>
+</section>

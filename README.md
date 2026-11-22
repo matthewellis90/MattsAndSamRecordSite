@@ -19,4 +19,4 @@ The Record Room is a vinyl collection website built with ASP.NET Core MVC, Razor
 | [Windows deployment and email setup](docs/deployment.md) | Local development, builds, Task Scheduler, Cloudflare, and Namecheap SMTP |
 | [Operating and maintaining the site](docs/operations.md) | Health checks, backups, updates, troubleshooting, and one-time collection copies |
 
-These guides describe the restored Windows deployment and its ASP.NET Core source. The original GitHub `master` branch dates from 2022. Use the restored source checkout or a matching Windows release for the commands in these guides.
+Set `ConnectionStrings__DefaultConnection` outside source control for local development. The Windows installer generates the deployed connection from the SQL Server settings supplied at setup.
