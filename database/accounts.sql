@@ -62,6 +62,17 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.RecordSiteCollectionShare', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.RecordSiteCollectionShare (
+        account_id uniqueidentifier NOT NULL CONSTRAINT PK_RecordSiteCollectionShare PRIMARY KEY
+            CONSTRAINT FK_RecordSiteCollectionShare_Account REFERENCES dbo.RecordSiteAccount(id) ON DELETE CASCADE,
+        token uniqueidentifier NOT NULL CONSTRAINT UQ_RecordSiteCollectionShare_Token UNIQUE
+    );
+END;
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RecordSiteCollectionShare TO [record_site_runtime];
+GO
+
 CREATE OR ALTER PROCEDURE dbo.RecordSiteLockAccountChanges
 AS
 BEGIN

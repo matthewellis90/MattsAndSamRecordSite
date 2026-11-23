@@ -1,14 +1,19 @@
 @{
     var controller = ViewContext.RouteData.Values["controller"] as string;
+    var action = ViewContext.RouteData.Values["action"] as string;
     var isArtist = controller == "Artist";
-    var isCatalog = controller is "Home" or "Album" && (string)ViewContext.RouteData.Values["action"]! != "Privacy";
+    var isCatalog = controller == "Album" || (controller == "Home" && action == "Index");
+    var isShared = ViewData["SharedToken"] is Guid;
+    var isHomeIndex = controller == "Home" && action == "Index";
+    var isSharing = controller == "Sharing" && !isShared;
+    var signedIn = User.Identity?.IsAuthenticated == true;
 }
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Browse vinyl albums, singles and compilations, or create your own private record collection.">
+    <meta name="description" content="Build your own private music collection of vinyl, CDs and cassettes.">
     <meta name="theme-color" content="#181612">
     <title>@(ViewData["Title"] is string title ? $"{title} | {SiteBrand.Name}" : SiteBrand.Name)</title>
     <link rel="icon" type="image/png" href="~/images/record-icon.png">
@@ -23,37 +28,47 @@
                 <span class="brand-disc" aria-hidden="true"></span>
                 <span>@SiteBrand.Name</span>
             </a>
-            <nav aria-label="Main navigation" class="site-nav">
-                <a class="nav-link" aria-current="@(isCatalog ? "page" : null)" asp-controller="Home" asp-action="Index">Collection</a>
-                <a class="nav-link" aria-current="@(isArtist ? "page" : null)" asp-controller="Artist" asp-action="Index">Artists</a>
-                <a class="nav-link" asp-controller="Home" asp-action="Stats">Stats</a>
-                @if (User.Identity?.IsAuthenticated == true)
-                {
-                    <a class="nav-link" asp-controller="CollectionTools" asp-action="Index">Manage</a>
-                    <form class="inline-form" asp-controller="Admin" asp-action="Logout" method="post">
-                        <button class="nav-link signin" type="submit">Sign out</button>
-                    </form>
-                }
-                else
-                {
-                    <a class="nav-link signin" asp-controller="Admin" asp-action="Login">Sign in</a>
-                    <a class="nav-link" asp-controller="Admin" asp-action="Register">Create account</a>
-                }
-            </nav>
+            @if (!isShared)
+            {
+                <nav aria-label="Main navigation" class="site-nav">
+                    @if (signedIn)
+                    {
+                        <a class="nav-link" aria-current="@(isCatalog ? "page" : null)" asp-controller="Home" asp-action="Index">Collection</a>
+                        <a class="nav-link" aria-current="@(isArtist ? "page" : null)" asp-controller="Artist" asp-action="Index">Artists</a>
+                        <a class="nav-link" asp-controller="Home" asp-action="Stats">Stats</a>
+                        <a class="nav-link" asp-controller="CollectionTools" asp-action="Index">Manage</a>
+                        @if (CollectionSession.IsReady(User))
+                        {
+                            <a class="nav-link" aria-current="@(isSharing ? "page" : null)" asp-controller="Sharing" asp-action="Settings">Sharing</a>
+                        }
+                        <form class="inline-form" asp-controller="Admin" asp-action="Logout" method="post">
+                            <button class="nav-link signin" type="submit">Sign out</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <a class="nav-link signin" asp-controller="Admin" asp-action="Login">Sign in</a>
+                        <a class="nav-link" asp-controller="Admin" asp-action="Register">Create account</a>
+                    }
+                </nav>
+            }
         </div>
-        <div class="shell header-search">
-            <form asp-controller="Home" asp-action="Index" asp-fragment="collection" method="get" role="search" aria-label="Search the record collection">
-                <label class="visually-hidden" for="global-search">Search records</label>
-                <input type="search" id="global-search" name="search" value="@Context.Request.Query["search"]"
-                       maxlength="200" placeholder="Search titles, artists, years…" autocomplete="off"
-                       data-suggest="@Url.Action("Suggest", "Home")" aria-controls="record-suggestions">
-                <button type="submit" class="button button-solid">Search</button>
-                <ul id="record-suggestions" class="suggestions" aria-label="Matching records" hidden></ul>
-            </form>
-        </div>
+        @if (signedIn && !isShared && !isHomeIndex)
+        {
+            <div class="shell header-search">
+                <form asp-controller="Home" asp-action="Index" asp-fragment="collection" method="get" role="search" aria-label="Search the record collection">
+                    <label class="visually-hidden" for="global-search">Search records</label>
+                    <input type="search" id="global-search" name="search" value="@Context.Request.Query["search"]"
+                           maxlength="200" placeholder="Search titles, artists, years…" autocomplete="off"
+                           data-suggest="@Url.Action("Suggest", "Home")" aria-controls="record-suggestions">
+                    <button type="submit" class="button button-solid">Search</button>
+                    <ul id="record-suggestions" class="suggestions" aria-label="Matching records" hidden></ul>
+                </form>
+            </div>
+        }
     </header>
     <main id="main">
-        @if (TempData["Status"] is string status)
+        @if (!isShared && TempData["Status"] is string status)
         {
             <div class="shell"><p class="status" role="status">@status</p></div>
         }
@@ -61,8 +76,14 @@
     </main>
     <footer class="site-footer">
         <div class="shell footer-inner">
-            <a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-disc" aria-hidden="true"></span> @SiteBrand.Name</a>
-            <a class="quiet-link" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            <div>
+                <a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-disc" aria-hidden="true"></span> @SiteBrand.Name</a>
+                <p class="footer-copyright">@SiteBrand.Copyright</p>
+            </div>
+            <nav class="footer-links" aria-label="Footer navigation">
+                <a class="quiet-link" asp-controller="Home" asp-action="Faq">FAQs</a>
+                <a class="quiet-link" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            </nav>
         </div>
     </footer>
     @await RenderSectionAsync("Scripts", required: false)

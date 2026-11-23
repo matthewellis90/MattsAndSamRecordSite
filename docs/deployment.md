@@ -22,7 +22,7 @@ dotnet build
 dotnet run --no-launch-profile
 ```
 
-Open `http://127.0.0.1:5782` for the catalog. Full sign-up also requires SMTP, HTTPS links, and the Windows personal database provisioner. Use a separate deployment for end-to-end account testing.
+Open `http://127.0.0.1:5782` for the welcome page. Catalog browsing requires sign-in. Full sign-up also requires SMTP, HTTPS links, and the Windows personal database provisioner. Use a separate deployment for end-to-end account testing.
 
 ## Install or update on the Windows host
 

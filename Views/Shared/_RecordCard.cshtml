@@ -1,10 +1,15 @@
 @model Album
+@{
+    var href = ViewData["SharedToken"] is Guid token
+        ? Url.RouteUrl("SharedRecord", new { token, id = Model.Id })
+        : Url.Action("Details", "Album", new { id = Model.Id });
+}
 <li>
     <article class="record-card">
-        <a asp-controller="Album" asp-action="Details" asp-route-id="@Model.Id" class="card-link">
+        <a href="@href" class="card-link">
             <partial name="_RecordArt" model="Model" />
             <div class="card-copy">
-                <p class="record-type">@Model.Kind</p>
+                <p class="record-type">@Model.Kind · @Model.Medium</p>
                 <h3>@Model.Name</h3>
                 <p>@Model.DisplayArtist @if (Model.Year is int year && year > 0) { <span aria-hidden="true">·</span> @year }</p>
             </div>

@@ -22,13 +22,15 @@ public sealed class Album
         ?? (string.IsNullOrWhiteSpace(ArtistName) ? "Uncredited" : ArtistName);
     public int? Year { get; set; }
     public RecordKind Kind { get; set; }
+    public RecordMedium Medium { get; set; }
     public string? Format { get; set; }
-    public bool HasVinylFormatDetails => IsDetailedVinylFormat(Format);
+    public bool HasVinylFormatDetails => Medium == RecordMedium.Vinyl && IsDetailedVinylFormat(Format);
 
     public static bool IsDetailedVinylFormat(string? format) => !string.IsNullOrWhiteSpace(format)
         && !string.Equals(format.Trim(), VinylFormat, StringComparison.OrdinalIgnoreCase);
     public string? Notes { get; set; }
     public string? CoverUrl { get; set; }
+    public string? SpotifyUrl { get; set; }
     public string? Label { get; set; }
     public string? Genre { get; set; }
     public string? Country { get; set; }
@@ -40,6 +42,7 @@ public sealed class Album
     public Guid? FrontSleeveKey { get; set; }
     public Guid? BackSleeveKey { get; set; }
     public bool PressingReviewed { get; set; }
+    public bool PressingEstimated { get; set; }
     public bool HasCover => FrontSleeveKey.HasValue || CatalogValidation.IsCoverUrl(CoverUrl);
     public byte[] RowVersion { get; set; } = [];
 }

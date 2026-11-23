@@ -1,0 +1,79 @@
+@model SharedCatalogView
+@{
+    ViewData["Title"] = $"{Model.Username}’s record collection";
+    ViewData["SharedToken"] = Model.Token;
+    var results = Model.Results;
+    var shareUrl = Url.Link("SharedCollection", new { token = Model.Token });
+}
+<section class="shell content-page shared-page">
+    <div class="shared-intro">
+        <div>
+            <h1>@ViewData["Title"]</h1>
+            <p>@Model.CollectionSize @(Model.CollectionSize == 1 ? "record" : "records")</p>
+        </div>
+        <div class="share-controls" data-share-controls data-share-url="@shareUrl" data-share-title="@ViewData["Title"]">
+            <button class="button button-accent" type="button" data-native-share hidden>Share</button>
+            <button class="button" type="button" data-copy-share hidden>Copy link</button>
+            <span class="field-hint" role="status" data-share-status></span>
+        </div>
+    </div>
+    @if (Model.Recent.Count > 0)
+    {
+        <section class="shared-recent" aria-labelledby="shared-recent-title">
+            <h2 id="shared-recent-title">Recently added</h2>
+            <ul class="record-grid shared-strip">
+                @foreach (var record in Model.Recent)
+                {
+                    <partial name="_RecordCard" model="record" />
+                }
+            </ul>
+        </section>
+    }
+    <h2 class="shared-library-title">The collection</h2>
+    <form class="share-search" asp-route="SharedCollection" asp-route-token="@Model.Token" method="get">
+        <label for="shared-search">Search this collection</label>
+        <div class="actions">
+            <input id="shared-search" name="search" type="search" value="@Model.Search" maxlength="200" placeholder="Title, artist, or year">
+            <label class="visually-hidden" for="shared-medium">Media</label>
+            <select id="shared-medium" name="medium">
+                <option value="">All media</option>
+                @foreach (var medium in Enum.GetValues<RecordMedium>())
+                {
+                    <option value="@medium" selected="@(Model.Medium == medium)">@medium</option>
+                }
+            </select>
+            <button class="button button-solid" type="submit">Search</button>
+        </div>
+    </form>
+    @if (!string.IsNullOrWhiteSpace(Model.Search) || Model.Medium.HasValue)
+    {
+        <p class="results-info">@results.TotalCount @(results.TotalCount == 1 ? "match" : "matches")</p>
+    }
+    @if (results.Items.Count == 0)
+    {
+        <div class="empty"><h2>@(string.IsNullOrWhiteSpace(Model.Search) && !Model.Medium.HasValue ? "This collection is empty" : "No matching records")</h2></div>
+    }
+    else
+    {
+        <ul class="record-grid">
+            @foreach (var record in results.Items)
+            {
+                <partial name="_RecordCard" model="record" />
+            }
+        </ul>
+    }
+    @if (results.TotalPages > 1)
+    {
+        <nav class="pagination" aria-label="Collection pages">
+            @if (results.Page > 1)
+            {
+                <a class="button" asp-route="SharedCollection" asp-route-token="@Model.Token" asp-route-search="@Model.Search" asp-route-medium="@Model.Medium" asp-route-page="@(results.Page - 1)">Previous</a>
+            }
+            <span>Page @results.Page of @results.TotalPages</span>
+            @if (results.Page < results.TotalPages)
+            {
+                <a class="button" asp-route="SharedCollection" asp-route-token="@Model.Token" asp-route-search="@Model.Search" asp-route-medium="@Model.Medium" asp-route-page="@(results.Page + 1)">Next</a>
+            }
+        </nav>
+    }
+</section>

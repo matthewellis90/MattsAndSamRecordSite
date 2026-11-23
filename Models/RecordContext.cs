@@ -32,9 +32,11 @@ public sealed class RecordContext(DbContextOptions<RecordContext> options) : DbC
             entity.Property(album => album.ArtistName).HasColumnName("artist_name").HasMaxLength(200);
             entity.Property(album => album.Year).HasColumnName("year");
             entity.Property(album => album.Kind).HasColumnName("record_kind").HasConversion<int>();
+            entity.Property(album => album.Medium).HasColumnName("record_medium").HasConversion<int>().HasDefaultValue(RecordMedium.Vinyl);
             entity.Property(album => album.Format).HasColumnName("record_format").HasMaxLength(100);
             entity.Property(album => album.Notes).HasColumnName("notes").HasMaxLength(2000);
             entity.Property(album => album.CoverUrl).HasColumnName("cover_url").HasMaxLength(2048);
+            entity.Property(album => album.SpotifyUrl).HasColumnName("spotify_url").HasMaxLength(100);
             entity.Property(album => album.Label).HasColumnName("record_label").HasMaxLength(100);
             entity.Property(album => album.Genre).HasColumnName("genre").HasMaxLength(80);
             entity.Property(album => album.Country).HasColumnName("country").HasMaxLength(80);
@@ -46,6 +48,7 @@ public sealed class RecordContext(DbContextOptions<RecordContext> options) : DbC
             entity.Property(album => album.FrontSleeveKey).HasColumnName("front_sleeve_key");
             entity.Property(album => album.BackSleeveKey).HasColumnName("back_sleeve_key");
             entity.Property(album => album.PressingReviewed).HasColumnName("pressing_reviewed");
+            entity.Property(album => album.PressingEstimated).HasColumnName("pressing_estimated");
             entity.Ignore(album => album.HasCover);
             entity.Property(album => album.RowVersion).HasColumnName("row_version").IsRowVersion();
         });

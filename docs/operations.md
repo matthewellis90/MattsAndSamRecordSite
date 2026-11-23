@@ -25,13 +25,19 @@ Test restores in an isolated SQL instance. Check that the registry and personal 
 
 Before updating, take current backups. Build or extract the new release and run `Update The Record Room.cmd` as administrator for the existing default deployment, or use the PowerShell installer with the installed settings. The installer checks readiness and attempts to restore the prior task configuration if startup fails. SQL backups are the recovery point for database changes.
 
-After an update, check public browsing, filters, owner sign-in, record editing, personal collection isolation, one camera or manual barcode lookup, and both email flows. Use a disposable test account and a mailbox you control.
+After an update, check that signed-out visitors see the welcome page and that direct catalog links require sign-in. With a disposable test account and a mailbox you control, check the media sections, filters, record editing, collection isolation, a camera or manual barcode lookup, and both email flows. Open a valid sharing link while signed out to check read-only access.
 
-## Copy the public collection into a personal account
+## Share a collection and listen on Spotify
 
-Verify the account's email and allow its database to finish provisioning. For the existing installation, the separately supplied **Copy Collection to Matt** launcher copies the public collection into the `matt` account and reports record, artist, and image totals.
+Sign in to a personal account and open **Sharing**. Create a link and copy it to a friend. The link gives read-only access to the username, records, pressing details, and sleeve images. Create a new link or turn sharing off to revoke access through the current link.
 
-The merge keeps populated fields on confidently matched pressings and fills missing details and sleeve images from the public collection. Uncertain matches are copied separately so distinct pressings are preserved. The SQL transaction rolls back on failure and records completion so the same merge cannot be replayed. Once copied, edits in the personal catalog are independent of the public collection.
+Record pages offer a Spotify search by title and artist. To link a specific album or track, open **Edit record** and paste the Spotify URL. MusicBrainz lookups can also fill this field when the release has a single Spotify link. Opening Spotify or loading its player connects to Spotify. Playback availability depends on Spotify and the listener’s browser, account, and region.
+
+## Copy the owner collection into a personal account
+
+Verify the account's email and allow its database to finish provisioning. For the existing installation, the separately supplied **Copy Collection to Matt** launcher copies the owner collection into the `matt` account and reports record, artist, and image totals.
+
+The merge keeps populated fields on confidently matched pressings and fills missing details and sleeve images from the owner collection. Uncertain matches are copied separately so distinct pressings are preserved. The SQL transaction rolls back on failure and records completion so the same merge cannot be replayed. Once copied, edits in the personal catalog are independent of the owner collection.
 
 ## Troubleshooting
 

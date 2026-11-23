@@ -8,10 +8,10 @@ namespace MattsRecords.Controllers;
 public sealed class AlbumController(RecordRepository records, PressingLookup pressings, DiscogsLookup discogs,
     ILogger<AlbumController> logger) : Controller
 {
-    [HttpGet]
+    [Authorize, HttpGet]
     public IActionResult Index(string? album) => RedirectToAction("Index", "Home", new { search = album });
 
-    [HttpGet("records/{id:int}", Order = 0)]
+    [Authorize, HttpGet("records/{id:int}", Order = 0)]
     [HttpGet("Album/Details/{id:int}", Order = 1)]
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
@@ -88,7 +88,7 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
         candidate with
         {
             CollectionMatches = new RecordIdentity(candidate.Title, candidate.Artist, candidate.Barcode, candidate.Id,
-                candidate.DiscogsId).FindMatches(collection).Select(match => match.Match).ToArray()
+                candidate.DiscogsId).FindMatches(collection, medium: candidate.Medium).Select(match => match.Match).ToArray()
         };
 
     private JsonResult LookupResults(IReadOnlyList<PressingCandidate> candidates, IReadOnlyList<Album> collection,
@@ -145,7 +145,7 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
         View("Edit", await WithArtistsAsync(new RecordForm(), cancellationToken));
 
     [Authorize, HttpGet]
-    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(int id, string? lookup, CancellationToken cancellationToken)
     {
         var record = await records.FindAlbumAsync(id, cancellationToken);
         if (record is null)
@@ -153,6 +153,8 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
             return NotFound();
         }
 
+        ViewData["LookupMode"] = lookup is "Barcode" or "Catalogue" ? lookup : null;
+        ViewData["LookupArtist"] = record.DisplayArtist == "Uncredited" ? null : record.DisplayArtist;
         return View(await WithArtistsAsync(new RecordForm
         {
             Id = record.Id,
@@ -160,9 +162,11 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
             ArtistId = record.ArtistId,
             Year = record.Year,
             Kind = record.Kind,
+            Medium = record.Medium,
             Format = record.Format,
             Notes = record.Notes,
             CoverUrl = record.CoverUrl,
+            SpotifyUrl = record.SpotifyUrl,
             Label = record.Label,
             Genre = record.Genre,
             Country = record.Country,
@@ -190,9 +194,11 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
             ArtistId = form.ArtistId,
             Year = form.Year,
             Kind = form.Kind,
+            Medium = form.Medium,
             Format = form.Format?.Trim(),
             Notes = form.Notes?.Trim(),
             CoverUrl = form.CoverUrl?.Trim(),
+            SpotifyUrl = SpotifyRelease.Normalize(form.SpotifyUrl),
             Label = form.Label,
             Genre = form.Genre,
             Country = form.Country,
@@ -201,6 +207,7 @@ public sealed class AlbumController(RecordRepository records, PressingLookup pre
             PressingYear = form.PressingYear,
             MusicBrainzId = form.MusicBrainzId,
             DiscogsId = form.DiscogsId,
+            PressingReviewed = form.Id.HasValue && form.ConfirmPressingReviewed,
             RowVersion = !form.Id.HasValue ? [] : Convert.FromBase64String(form.Version!)
         };
 

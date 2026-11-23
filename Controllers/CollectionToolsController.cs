@@ -15,14 +15,16 @@ public sealed class CollectionToolsController(RecordRepository records) : Contro
     public async Task<IActionResult> Index(string? queue, string? search, int page, CancellationToken cancellationToken)
     {
         var entries = await records.SnapshotAsync(cancellationToken);
-        var selected = queue is "cover" or "format" or "all" ? queue : "review";
+        var selected = queue is "cover" or "format" or "size" or "estimated" or "all" ? queue : "review";
         var terms = CatalogSearch.Terms(search);
         var matches = entries.Where(record => selected switch
             {
                 "cover" => !record.HasCover,
-                "format" => !record.HasVinylFormatDetails,
+                "format" => record.Medium == RecordMedium.Vinyl && !record.HasVinylFormatDetails,
+                "size" => record.Medium == RecordMedium.Vinyl && !VinylSizing.HasSize(record.Format),
+                "estimated" => record.PressingEstimated,
                 "all" => true,
-                _ => !record.PressingReviewed
+                _ => IsPendingPressing(record)
             }).Where(record => terms.Length == 0 || CatalogSearch.Matches(record, terms))
             .OrderBy(record => record.HasCover).ThenBy(record => record.Name).ThenBy(record => record.Id).ToList();
         const int pageSize = 24;
@@ -30,15 +32,21 @@ public sealed class CollectionToolsController(RecordRepository records) : Contro
         page = Math.Clamp(page, 1, pages);
         return View(new SleeveQueue(matches.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
             selected, search, page, pages, matches.Count,
-            entries.Count(record => !record.HasCover), entries.Count(record => !record.HasVinylFormatDetails),
-            entries.Count(record => !record.PressingReviewed)));
+            entries.Count(record => !record.HasCover),
+            entries.Count(record => record.Medium == RecordMedium.Vinyl && !record.HasVinylFormatDetails),
+            entries.Count(record => record.Medium == RecordMedium.Vinyl && !VinylSizing.HasSize(record.Format)),
+            entries.Count(IsPendingPressing),
+            entries.Count(record => record.PressingEstimated)));
     }
+
+    private static bool IsPendingPressing(Album record) =>
+        !record.PressingReviewed && !record.PressingEstimated && CatalogValidation.MissingPressingDetails(record).Any();
 
     [HttpGet]
     public async Task<IActionResult> Export(CancellationToken cancellationToken)
     {
         var snapshot = await records.SnapshotAsync(cancellationToken);
-        var csv = new StringBuilder("Id,Title,Artist,Type,Release year,Format,Label,Genre,Country,Pressing year,Catalogue number,Barcode,MusicBrainz ID,Cover URL,Notes,Front sleeve path,Back sleeve path,Pressing reviewed\r\n");
+        var csv = new StringBuilder("Id,Title,Artist,Type,Release year,Format,Label,Genre,Country,Pressing year,Catalogue number,Barcode,MusicBrainz ID,Cover URL,Notes,Front sleeve path,Back sleeve path,Pressing reviewed,Media\r\n");
         foreach (var record in snapshot)
         {
             csv.AppendJoin(',', new[] {
@@ -48,7 +56,7 @@ public sealed class CollectionToolsController(RecordRepository records) : Contro
                 record.MusicBrainzId?.ToString(), record.CoverUrl, record.Notes,
                 record.FrontSleeveKey is Guid front ? Url.RouteUrl("SleeveImage", new { id = record.Id, side = 0, revision = front }) : null,
                 record.BackSleeveKey is Guid back ? Url.RouteUrl("SleeveImage", new { id = record.Id, side = 1, revision = back }) : null,
-                record.PressingReviewed ? "Yes" : "No"
+                record.PressingReviewed ? "Yes" : "No", record.Medium.ToString()
             }.Select(EscapeCell)).Append("\r\n");
         }
         return File(Encoding.UTF8.GetBytes("\uFEFF" + csv), "text/csv; charset=utf-8", SiteBrand.ExportFileName);

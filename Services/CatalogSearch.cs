@@ -14,7 +14,7 @@ internal static class CatalogSearch
 
     public static bool Matches(Album record, string[] terms)
     {
-        var words = string.Join(' ', record.Name, record.DisplayArtist, record.Label, record.Genre, record.Format,
+        var words = string.Join(' ', record.Name, record.DisplayArtist, record.Label, record.Genre, record.Format, record.Medium,
             record.Year, record.PressingYear, record.CatalogNumber, record.Barcode)
             .Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         return terms.All(term => words.Any(word => MatchesWord(word, term)));

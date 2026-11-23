@@ -1,12 +1,19 @@
 @model Album
-<div class="record-art record-art-@(Model.Id % 5)" aria-hidden="true">
-    <span class="vinyl"></span>
+@{
+    var describe = ViewData["DescribeSleeve"] is true;
+    var imageAlt = describe ? $"Front sleeve of {Model.Name}" : "";
+}
+<div class="record-art record-art-@(Model.Id % 5)" aria-hidden="@(!describe ? "true" : null)">
+    <span class="@(Model.Medium == RecordMedium.CD ? "compact-disc" : Model.Medium == RecordMedium.Cassette ? "cassette" : "vinyl")" aria-hidden="true"></span>
     @if (Model.FrontSleeveKey is Guid front)
     {
-        <img class="record-cover" src="@Url.RouteUrl("SleeveImage", new { id = Model.Id, side = 0, revision = front })" alt="" loading="lazy" decoding="async">
+        var url = ViewData["SharedToken"] is Guid token
+            ? Url.RouteUrl("SharedSleeve", new { token, id = Model.Id, side = 0, revision = front })
+            : Url.RouteUrl("SleeveImage", new { id = Model.Id, side = 0, revision = front });
+        <img class="record-cover" src="@url" alt="@imageAlt" loading="@(describe ? "eager" : "lazy")" decoding="async">
     }
     else if (CatalogValidation.IsCoverUrl(Model.CoverUrl))
     {
-        <img class="record-cover" src="@Model.CoverUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+        <img class="record-cover" src="@Model.CoverUrl" alt="@imageAlt" loading="@(describe ? "eager" : "lazy")" decoding="async" referrerpolicy="no-referrer">
     }
 </div>

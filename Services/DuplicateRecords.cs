@@ -17,13 +17,16 @@ internal sealed record RecordIdentity(string Title, string Artist, string? Barco
     private const CompareOptions Comparison =
         CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace | CompareOptions.IgnoreSymbols;
 
-    public (Album Record, RecordMatch Match)[] FindMatches(IEnumerable<Album> collection, bool matchTitleAlone = false)
+    public (Album Record, RecordMatch Match)[] FindMatches(IEnumerable<Album> collection, bool matchTitleAlone = false,
+        RecordMedium? medium = null)
     {
         var codes = RecordBarcode.EquivalentCodes(Barcode ?? "");
         var artist = ComparableArtist(Artist);
         var matches = new List<(Album, RecordMatch)>();
         foreach (var record in collection)
         {
+            if (medium.HasValue && record.Medium != medium.Value)
+                continue;
             var credit = ComparableArtist(record.DisplayArtist);
             var samePressing = (MusicBrainzId.HasValue && record.MusicBrainzId == MusicBrainzId)
                 || (DiscogsId.HasValue && record.DiscogsId == DiscogsId);

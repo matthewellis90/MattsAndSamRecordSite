@@ -1,0 +1,46 @@
+@model Album
+@{
+    var fields = new (string Label, string? Value)[] {
+        ("Released", Model.Year is > 0 ? Model.Year.ToString() : null),
+        ("Format details", RecordMedia.HasDetails(Model.Medium, Model.Format) ? Model.Format : null),
+        ("Pressing year", Model.PressingYear?.ToString()),
+        ("Label", Model.Label),
+        ("Genre", Model.Genre),
+        ("Pressing country", Model.Country),
+        ("Catalogue number", Model.CatalogNumber),
+        ("Barcode", ViewData["SharedToken"] is Guid ? null : Model.Barcode)
+    };
+    var details = fields.Where(field => !string.IsNullOrWhiteSpace(field.Value)).ToArray();
+}
+@if (details.Length > 0 || Model.MusicBrainzId.HasValue || Model.DiscogsId.HasValue)
+{
+    <section class="pressing-details" aria-labelledby="pressing-details-title">
+        <h2 id="pressing-details-title">Pressing details</h2>
+        @if (Model.PressingEstimated)
+        {
+            <p class="field-hint">Estimated edition. The details may differ from the physical copy.</p>
+        }
+        @if (details.Length > 0)
+        {
+            <dl class="metadata">
+                @foreach (var (label, value) in details)
+                {
+                    <div><dt>@label</dt><dd>@value</dd></div>
+                }
+            </dl>
+        }
+        @if (Model.MusicBrainzId.HasValue || Model.DiscogsId.HasValue)
+        {
+            <div class="pressing-sources">
+                @if (Model.MusicBrainzId is Guid musicBrainzId)
+                {
+                    <a href="https://musicbrainz.org/release/@musicBrainzId">MusicBrainz release</a>
+                }
+                @if (Model.DiscogsId is int discogsId)
+                {
+                    <a href="https://www.discogs.com/release/@discogsId">Data provided by Discogs</a>
+                }
+            </div>
+        }
+    </section>
+}

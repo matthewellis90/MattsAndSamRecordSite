@@ -1,0 +1,48 @@
+@model string
+@{
+    ViewData["Title"] = "Share your collection";
+    var isPersonal = CollectionSession.IsPersonal(User);
+}
+<section class="shell content-page">
+    <a class="back-link" asp-controller="CollectionTools" asp-action="Index">Manage the collection</a>
+    <div class="form-panel form-narrow">
+        <h1>Share your collection</h1>
+        @if (!isPersonal)
+        {
+            <p>Sign in to your personal account to create a read-only collection link.</p>
+        }
+        else
+        {
+            <p>Anyone with your link can see your username, records, pressing details and sleeve images. Your notes and email address stay private.</p>
+        }
+        @if (isPersonal && Model is null)
+        {
+            <p>Sharing is off for this collection.</p>
+            <form asp-action="Create" method="post">
+                <button class="button button-accent" type="submit">Create a sharing link</button>
+            </form>
+        }
+        else if (isPersonal && Model is not null)
+        {
+            <div class="edit-form" data-share-controls data-share-url="@Model" data-share-title="My collection on The Record Room">
+                <label for="collection-share-url">Sharing link</label>
+                <input id="collection-share-url" type="url" value="@Model" readonly>
+                <div class="actions">
+                    <button class="button button-accent" type="button" data-native-share hidden>Share</button>
+                    <button class="button" type="button" data-copy-share hidden>Copy link</button>
+                    <a class="button" href="@Model" target="_blank" rel="noopener noreferrer">View shared collection</a>
+                </div>
+                <span role="status" data-share-status></span>
+            </div>
+            <p>Creating a new link or turning sharing off disables the current link.</p>
+            <div class="actions">
+                <form asp-action="Create" method="post">
+                    <button class="button" type="submit">Create a new link</button>
+                </form>
+                <form asp-action="Disable" method="post">
+                    <button class="button button-danger" type="submit">Turn sharing off</button>
+                </form>
+            </div>
+        }
+    </div>
+</section>

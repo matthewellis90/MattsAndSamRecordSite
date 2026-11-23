@@ -1,0 +1,21 @@
+@model SharedRecordView
+@{
+    var record = Model.Record;
+    ViewData["Title"] = record.Name;
+    ViewData["SharedToken"] = Model.Token;
+}
+<section class="shell content-page">
+    <a class="back-link" asp-route="SharedCollection" asp-route-token="@Model.Token">Shared collection</a>
+    <article class="record-detail">
+        <div class="detail-intro">
+            <p class="eyebrow">@record.Kind · @record.Medium</p>
+            <h1>@record.Name</h1>
+            <p class="detail-artist">@record.DisplayArtist</p>
+            <partial name="_Spotify" model="record" />
+        </div>
+        <partial name="_RecordSleeves" model="record" />
+        <div class="detail-copy">
+            <partial name="_PressingDetails" model="record" />
+        </div>
+    </article>
+</section>

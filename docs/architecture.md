@@ -17,15 +17,17 @@ Application -> Namecheap SMTP through MailKit for account mail
 Windows scheduled worker -> SQL Server for personal database provisioning
 ```
 
-## Restored source layout
+## Source layout
 
 | Path | Responsibility |
 | --- | --- |
 | `MattsRecords.csproj`, `Program.cs` | .NET 10 project, dependency injection, request pipeline, authentication, rate limits, and readiness checks |
-| `Controllers/` | Public catalog, record and artist editing, sleeve images, registration, and account recovery |
+| `Controllers/` | Catalog browsing, record and artist editing, sleeve images, collection sharing, registration, and account recovery |
 | `Services/RecordRepository.cs` | Catalog reads, writes, and duplicate review during save |
 | `Services/CatalogSearch.cs`, `DuplicateRecords.cs` | Search and duplicate matching |
 | `Services/PressingLookup.cs`, `DiscogsLookup.cs`, `RecordBarcode.cs` | Pressing lookup, identifiers, and barcode normalization |
+| `Services/CollectionSharing.cs`, `SharingController` | Read-only sharing links and access to the linked catalog |
+| `Services/PressingBatch.cs` | Optional batch completion and review reports for pressing metadata |
 | `Services/CollectionAccounts.cs`, `AccountEmail.cs`, `AccountRecovery.cs`, `AccountMail.cs` | Account database selection, email verification, password resets, and mail delivery |
 | `Models/RecordContext.cs`, `Models/` | EF Core table mappings and data models for records, artists, sleeve photos, and forms |
 | `Views/`, `wwwroot/` | Razor templates, styling, browser scripts, and bundled ZXing barcode scanner |
@@ -38,15 +40,18 @@ Windows scheduled worker -> SQL Server for personal database provisioning
 | SQL object | Contents |
 | --- | --- |
 | `dbo.RecordSiteArtist` | Artist names linked to releases |
-| `dbo.RecordSiteRelease` | Title, artist credit, release type and year, pressing metadata, identifiers, cover URL, sleeve references, and date added |
+| `dbo.RecordSiteRelease` | Title, artist credit, release type and year, physical media, pressing metadata, identifiers, cover URL, sleeve references, and date added |
 | `dbo.RecordSiteSleeve` | Front and rear images stored as JPEG bytes, keyed by record and side |
 | `dbo.RecordSiteLegacyImport` | One-time migration marker and imported record counts |
 | `dbo.RecordSiteAccount` | Personal usernames, password hashes, verified email addresses, and provisioning state |
 | `dbo.RecordSiteEmailChange`, `dbo.RecordSiteRecovery` | Pending email verification and reset requests with hashed tokens and expiry |
+| `dbo.RecordSiteCollectionShare` | Revocable sharing token for a personal collection |
 
-The owner database, `MattVinyl`, serves the public catalog and stores the account registry. Initial provisioning imports the legacy `Artist`, `Album`, `Single`, and `Compilation` tables into the application catalog where those source tables exist. Subsequent edits use the application tables.
+The owner database, `MattVinyl`, stores the catalog for the built-in owner sign-in and the account registry. Initial provisioning imports the legacy `Artist`, `Album`, `Single`, and `Compilation` tables into the application catalog where those source tables exist. Subsequent edits use the application tables.
 
-Each personal catalog uses the same catalog schema in a database named `MattsRecords_User_<account GUID without hyphens>`. The authenticated account determines the active database for reads, edits, exports, and image requests. Personal catalog rows are separate from the public collection.
+Each personal catalog uses the same catalog schema in a database named `MattsRecords_User_<account GUID without hyphens>`. The authenticated account determines the active database for reads, edits, exports, and image requests. Read-only sharing links allow recipients to browse the specific personal collection their link identifies.
+
+The home controller serves the welcome page before querying the catalog for a signed-out request. Private catalog routes require sign-in. The signed-in collection groups results by media and paginates within each group while applying the current search, filters, sort, and view.
 
 ## Account and record workflows
 

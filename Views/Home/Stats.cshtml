@@ -3,11 +3,12 @@
     ViewData["Title"] = "Collection stats";
     var decades = Model.Where(record => record.Year >= 1000).GroupBy(record => record.Year!.Value / 10 * 10)
         .OrderBy(group => group.Key).ToArray();
-    var formats = Model.Where(record => record.HasVinylFormatDetails).GroupBy(record => record.Format!.Trim(),
-        StringComparer.OrdinalIgnoreCase).OrderByDescending(group => group.Count())
-        .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase).ToArray();
+    var formats = Model.Where(record => RecordMedia.HasDetails(record.Medium, record.Format))
+        .GroupBy(record => (record.Medium, Format: record.Format!.Trim().ToUpperInvariant()))
+        .OrderBy(group => group.Key.Medium).ThenByDescending(group => group.Count()).ThenBy(group => group.Key.Format).ToArray();
+    var media = Model.GroupBy(record => record.Medium).OrderBy(group => group.Key).ToArray();
     var releaseTypes = Model.GroupBy(record => record.Kind).OrderBy(group => group.Key).ToArray();
-    var missingFormats = Model.Count(record => !record.HasVinylFormatDetails);
+    var missingFormats = Model.Count(record => record.Medium == RecordMedium.Vinyl && !record.HasVinylFormatDetails);
     var canReviewFormats = missingFormats > 0 && User.Identity?.IsAuthenticated == true;
     var artists = Model.Where(record => record.ArtistId.HasValue).GroupBy(record => record.ArtistId!.Value)
         .OrderByDescending(group => group.Count()).ThenBy(group => group.First().DisplayArtist).Take(10).ToArray();
@@ -42,17 +43,21 @@
                     }
                 </ul>
             }
-            <h3 class="stats-subheading">Physical format</h3>
+            <h3 class="stats-subheading">Media</h3>
             <ul class="stats-list">
-                <li><a asp-action="Index" asp-route-format="@Album.VinylFormat" asp-fragment="collection">Vinyl</a><span>@Model.Count</span></li>
+                @foreach (var medium in media)
+                {
+                    <li><a asp-action="Index" asp-route-medium="@medium.Key" asp-fragment="collection">@medium.Key</a><span>@medium.Count()</span></li>
+                }
             </ul>
             @if (formats.Length > 0 || canReviewFormats)
             {
-                <h3 class="stats-subheading">Vinyl format details</h3>
+                <h3 class="stats-subheading">Format details</h3>
                 <ul class="stats-list">
                     @foreach (var format in formats)
                     {
-                        <li><a asp-action="Index" asp-route-format="@format.Key" asp-fragment="collection">@format.Key</a><span>@format.Count()</span></li>
+                        var label = format.First().Format!.Trim();
+                        <li><a asp-action="Index" asp-route-medium="@format.Key.Medium" asp-route-format="@label" asp-fragment="collection">@label</a><span>@format.Count()</span></li>
                     }
                     @if (canReviewFormats)
                     {
@@ -60,7 +65,7 @@
                     }
                     else if (missingFormats > 0)
                     {
-                        <li><a asp-action="Index" asp-route-format="@RecordQuery.UnrecordedFormat" asp-fragment="collection">Details not recorded</a><span>@missingFormats</span></li>
+                        <li><a asp-action="Index" asp-route-format="@RecordQuery.UnrecordedFormat" asp-fragment="collection">Vinyl details not recorded</a><span>@missingFormats</span></li>
                     }
                 </ul>
             }

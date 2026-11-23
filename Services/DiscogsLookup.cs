@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MattsRecords.Models;
 
 namespace MattsRecords.Services;
 
@@ -10,7 +11,7 @@ public sealed partial class DiscogsLookup(HttpClient client, ILogger<DiscogsLook
         var codes = RecordBarcode.EquivalentCodes(term);
         if (codes.Length == 0)
             return [];
-        using var json = await ReadAsync($"database/search?barcode={codes[0]}&type=release&format=Vinyl", cancellationToken);
+        using var json = await ReadAsync($"database/search?barcode={codes[0]}&type=release", cancellationToken);
         if (json is null)
             return [];
 
@@ -18,32 +19,37 @@ public sealed partial class DiscogsLookup(HttpClient client, ILogger<DiscogsLook
         foreach (var result in List(json.RootElement, "results"))
         {
             var formats = Strings(result, "format");
+            var medium = RecordMedia.FromFormats(formats);
             var barcode = MatchBarcode(Strings(result, "barcode"), codes);
             var creditAndTitle = Text(result, "title").Split(" - ", 2);
             if (Number(result, "id") is not { } id || barcode is null ||
-                creditAndTitle.Length != 2 || !formats.Contains("Vinyl"))
+                creditAndTitle.Length != 2 || medium is null)
                 continue;
             candidates.Add(new PressingCandidate(creditAndTitle[1], CleanName(creditAndTitle[0]), Text(result, "catno"),
                 CleanName(Strings(result, "label").FirstOrDefault() ?? ""), barcode, Text(result, "country"),
-                Number(result, "year"), Format(formats), Kind(formats), null, null, null,
-                PrimaryGenre(result), Edition(formats), false, id));
+                Number(result, "year"), Format(medium.Value, formats), Kind(formats), null, null, null,
+                PrimaryGenre(result), Edition(formats), false, id) { Medium = medium });
         }
         return candidates.DistinctBy(candidate => candidate.DiscogsId).Take(12).ToArray();
     }
 
-    public async Task<PressingCandidate?> GetDetailsAsync(int id, string term, CancellationToken cancellationToken)
+    public async Task<PressingCandidate?> GetDetailsAsync(int id, string? term, CancellationToken cancellationToken)
     {
         using var json = await ReadAsync($"releases/{id}", cancellationToken);
         if (json is null)
             return null;
         var release = json.RootElement;
-        var formats = List(release, "formats").Where(format => Text(format, "name") == "Vinyl").ToArray();
-        var barcode = MatchBarcode(List(release, "identifiers").Where(item => Text(item, "type") == "Barcode")
-            .Select(item => Text(item, "value")), RecordBarcode.EquivalentCodes(term));
-        if (barcode is null || formats.Length == 0)
+        var formats = List(release, "formats").ToArray();
+        var medium = RecordMedia.FromFormats(formats.Select(format => Text(format, "name")));
+        var barcodes = List(release, "identifiers").Where(item => Text(item, "type") == "Barcode")
+            .Select(item => Text(item, "value")).ToArray();
+        var barcode = term is null ? barcodes.SelectMany(RecordBarcode.EquivalentCodes).FirstOrDefault()
+            : MatchBarcode(barcodes, RecordBarcode.EquivalentCodes(term));
+        if (medium is null || (term is not null && barcode is null))
             return null;
 
-        var descriptions = formats.SelectMany(format => Strings(format, "descriptions")).Distinct().ToArray();
+        var selectedFormats = formats.Where(format => RecordMedia.FromFormat(Text(format, "name")) == medium).ToArray();
+        var descriptions = selectedFormats.SelectMany(format => Strings(format, "descriptions")).Distinct().ToArray();
         var label = List(release, "labels").FirstOrDefault();
         var artist = string.Join(" ", List(release, "artists").SelectMany(item => new[]
             { CleanName(Text(item, "name")), Text(item, "join") }).Where(part => part.Length > 0));
@@ -59,8 +65,27 @@ public sealed partial class DiscogsLookup(HttpClient client, ILogger<DiscogsLook
             catch (HttpRequestException) { /* Keep the verified pressing year or other details. */ }
         }
         return new PressingCandidate(Text(release, "title"), artist, Text(label, "catno"), CleanName(Text(label, "name")),
-            barcode, Text(release, "country"), Number(release, "year"), Format(descriptions), Kind(descriptions),
-            null, null, releaseYear, PrimaryGenre(release), Edition(descriptions), true, id);
+            barcode ?? "", Text(release, "country"), Number(release, "year"), Format(medium.Value, descriptions), Kind(descriptions),
+            null, null, releaseYear, PrimaryGenre(release), Edition(descriptions), true, id) { Medium = medium };
+    }
+
+    public async Task<IReadOnlyList<int>> FindVinylIdsAsync(string field, string term, string title, string artist,
+        CancellationToken cancellationToken)
+    {
+        using var json = await ReadAsync($"database/search?type=release&format=Vinyl&per_page=100&{field}={Uri.EscapeDataString(term)}" +
+            $"&release_title={Uri.EscapeDataString(title)}&artist={Uri.EscapeDataString(artist)}", cancellationToken);
+        if (json is null || Number(Property(json.RootElement, "pagination"), "pages") is not (0 or 1))
+            return [];
+        return List(json.RootElement, "results").Select(item => Number(item, "id")).OfType<int>().Distinct().ToArray();
+    }
+
+    public static int? ReleaseId(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
+            uri.Host is not ("discogs.com" or "www.discogs.com") || !uri.IsDefaultPort || uri.UserInfo.Length != 0)
+            return null;
+        var segments = uri.AbsolutePath.Trim('/').Split('/');
+        return segments is ["release", var release] && int.TryParse(release.Split('-', 2)[0], out var id) && id > 0 ? id : null;
     }
 
     private async Task<JsonDocument?> ReadAsync(string path, CancellationToken cancellationToken)
@@ -92,7 +117,8 @@ public sealed partial class DiscogsLookup(HttpClient client, ILogger<DiscogsLook
         : descriptions.Contains("Single") ? "Single" : descriptions.Contains("EP") ? "EP"
         : descriptions.Contains("Album") || descriptions.Contains("LP") ? "Album" : "";
 
-    private static string Format(string[] descriptions) => descriptions.Contains("7\"") ? "7-inch vinyl"
+    private static string Format(RecordMedium medium, string[] descriptions) => medium != RecordMedium.Vinyl ? medium.ToString()
+        : descriptions.Contains("7\"") ? "7-inch vinyl"
         : descriptions.Contains("10\"") ? "10-inch vinyl"
         : descriptions.Contains("12\"") || descriptions.Contains("LP") ? "12-inch vinyl" : "Vinyl";
 

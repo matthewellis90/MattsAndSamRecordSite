@@ -1,0 +1,14 @@
+@model Album
+@{
+    var link = SpotifyRelease.Normalize(Model.SpotifyUrl);
+    var embed = SpotifyRelease.Embed(Model.SpotifyUrl);
+}
+<div class="spotify-listen">
+    <div class="actions">
+        <a class="button" href="@(link ?? SpotifyRelease.Search(Model))" target="_blank" rel="noopener noreferrer">@(link is null ? "Find on Spotify" : "Listen on Spotify")</a>
+        @if (embed is not null)
+        {
+            <button type="button" class="button" data-spotify-player="@embed" data-spotify-title="Spotify player for @Model.Name" hidden>Load Spotify player</button>
+        }
+    </div>
+</div>

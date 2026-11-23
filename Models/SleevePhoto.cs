@@ -26,8 +26,10 @@ public sealed class SleeveForm
     public bool RemoveBack { get; set; }
     [StringLength(100), Display(Name = "Catalogue number")]
     public string? CatalogNumber { get; set; }
-    [StringLength(100), Display(Name = "Vinyl format details")]
+    [StringLength(100), Display(Name = "Format details")]
     public string? Format { get; set; }
+    [EnumDataType(typeof(VinylSize)), Display(Name = "Vinyl size")]
+    public VinylSize Size { get; set; }
     [Display(Name = "Pressing reviewed")]
     public bool Reviewed { get; set; }
     [BindNever, ValidateNever]
@@ -35,4 +37,4 @@ public sealed class SleeveForm
 }
 
 public sealed record SleeveQueue(IReadOnlyList<Album> Items, string Queue, string? Search,
-    int Page, int Pages, int Matches, int MissingCovers, int MissingFormats, int PendingReviews);
+    int Page, int Pages, int Matches, int MissingCovers, int MissingFormats, int MissingSizes, int PendingReviews, int Estimated);

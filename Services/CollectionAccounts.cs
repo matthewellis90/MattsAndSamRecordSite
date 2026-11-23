@@ -2,9 +2,11 @@ using System.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using MattsRecords.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace MattsRecords.Services;
 
@@ -22,8 +24,14 @@ public sealed class CollectionDatabases(IConfiguration configuration)
         if (!CollectionSession.IsReady(principal!) || CollectionSession.GetId(principal!) is not Guid id)
             throw new InvalidOperationException("This personal collection is not ready.");
 
-        return new SqlConnectionStringBuilder(Owner) { InitialCatalog = PersonalPrefix + id.ToString("N") }.ConnectionString;
+        return ForPersonal(id);
     }
+
+    public RecordContext OpenPersonalCatalog(Guid id) =>
+        new(new DbContextOptionsBuilder<RecordContext>().UseSqlServer(ForPersonal(id)).Options);
+
+    private string ForPersonal(Guid id) =>
+        new SqlConnectionStringBuilder(Owner) { InitialCatalog = PersonalPrefix + id.ToString("N") }.ConnectionString;
 }
 
 public sealed record CollectionAccount(Guid Id, string Username, string PasswordHash, byte State);

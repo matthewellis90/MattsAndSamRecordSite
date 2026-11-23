@@ -131,6 +131,10 @@ BEGIN TRY
 
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'record_label') IS NULL
         ALTER TABLE dbo.RecordSiteRelease ADD record_label nvarchar(100) NULL;
+    IF COL_LENGTH(N'dbo.RecordSiteRelease', N'record_medium') IS NULL
+        ALTER TABLE dbo.RecordSiteRelease ADD record_medium int NOT NULL
+            CONSTRAINT DF_RecordSiteRelease_Medium DEFAULT (0)
+            CONSTRAINT CK_RecordSiteRelease_Medium CHECK (record_medium IN (0, 1, 2));
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'genre') IS NULL
         ALTER TABLE dbo.RecordSiteRelease ADD genre nvarchar(80) NULL;
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'country') IS NULL
@@ -149,6 +153,8 @@ BEGIN TRY
             CONSTRAINT DF_RecordSiteRelease_AddedAtUtc DEFAULT (SYSUTCDATETIME());
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'discogs_id') IS NULL
         ALTER TABLE dbo.RecordSiteRelease ADD discogs_id int NULL;
+    IF COL_LENGTH(N'dbo.RecordSiteRelease', N'spotify_url') IS NULL
+        ALTER TABLE dbo.RecordSiteRelease ADD spotify_url nvarchar(100) NULL;
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'front_sleeve_key') IS NULL
         ALTER TABLE dbo.RecordSiteRelease ADD front_sleeve_key uniqueidentifier NULL;
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'back_sleeve_key') IS NULL
@@ -156,6 +162,9 @@ BEGIN TRY
     IF COL_LENGTH(N'dbo.RecordSiteRelease', N'pressing_reviewed') IS NULL
         ALTER TABLE dbo.RecordSiteRelease ADD pressing_reviewed bit NOT NULL
             CONSTRAINT DF_RecordSiteRelease_PressingReviewed DEFAULT (0);
+    IF COL_LENGTH(N'dbo.RecordSiteRelease', N'pressing_estimated') IS NULL
+        ALTER TABLE dbo.RecordSiteRelease ADD pressing_estimated bit NOT NULL
+            CONSTRAINT DF_RecordSiteRelease_PressingEstimated DEFAULT (0);
 
     IF OBJECT_ID(N'dbo.RecordSiteSleeve', N'U') IS NULL
     BEGIN

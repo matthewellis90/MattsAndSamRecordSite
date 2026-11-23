@@ -72,6 +72,92 @@ if (recoveryToken && /^#[A-Za-z0-9_-]{43}$/.test(window.location.hash)) {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 }
 
+const recentCollection = document.querySelector("[data-recent-collection]");
+if (recentCollection) {
+    const preference = "record-room.recent-open";
+    let saved = null;
+    try { saved = localStorage.getItem(preference); } catch { /* Use the screen-size default. */ }
+    recentCollection.open = saved === null ? !matchMedia("(max-width: 43rem)").matches : saved === "true";
+    recentCollection.querySelector("summary").addEventListener("click", () => {
+        try { localStorage.setItem(preference, String(!recentCollection.open)); } catch { /* Native disclosure still works. */ }
+    });
+}
+
+const catalogFilters = document.querySelector("[data-catalog-filters]");
+if (catalogFilters) catalogFilters.open = !matchMedia("(max-width: 43rem)").matches;
+
+const sleeveGallery = document.querySelector("[data-sleeve-gallery]");
+if (sleeveGallery) {
+    const controls = sleeveGallery.querySelector("[data-sleeve-controls]");
+    const panels = Array.from(sleeveGallery.querySelectorAll("[data-sleeve-side]"));
+    const buttons = Array.from(controls.querySelectorAll("button"));
+    const showSide = selected => {
+        for (const button of buttons) {
+            const active = button === selected;
+            button.setAttribute("aria-pressed", String(active));
+            panels.find(panel => panel.id === button.getAttribute("aria-controls")).hidden = !active;
+        }
+    };
+    for (const button of buttons) button.addEventListener("click", () => showSide(button));
+    showSide(buttons[0]);
+    controls.hidden = false;
+}
+
+for (const controls of document.querySelectorAll("[data-share-controls]")) {
+    const copy = controls.querySelector("[data-copy-share]");
+    const share = controls.querySelector("[data-native-share]");
+    const field = controls.querySelector("#collection-share-url");
+    const status = controls.querySelector("[data-share-status]");
+    const url = controls.dataset.shareUrl;
+    if (!url) continue;
+
+    if (navigator.clipboard || field) {
+        copy.hidden = false;
+        copy.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(url);
+                status.textContent = "Link copied.";
+            } catch {
+                if (field) {
+                    field.focus();
+                    field.select();
+                }
+                status.textContent = field ? "Copy the selected link." : "Copy the link from your browser’s address bar.";
+            }
+        });
+    }
+
+    const shareData = { title: controls.dataset.shareTitle, url };
+    if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+        share.hidden = false;
+        share.addEventListener("click", async () => {
+            try {
+                await navigator.share(shareData);
+            } catch (error) {
+                if (error.name !== "AbortError")
+                    status.textContent = copy.hidden ? "Copy the link from your browser’s address bar." : "Sharing is unavailable. Use Copy link.";
+            }
+        });
+    }
+}
+
+const spotifyPlayer = document.querySelector("[data-spotify-player]");
+if (spotifyPlayer) {
+    spotifyPlayer.hidden = false;
+    spotifyPlayer.addEventListener("click", () => {
+        const frame = document.createElement("iframe");
+        frame.src = spotifyPlayer.dataset.spotifyPlayer;
+        frame.title = spotifyPlayer.dataset.spotifyTitle;
+        frame.className = "spotify-frame";
+        frame.height = frame.src.includes("/embed/track/") ? "152" : "352";
+        frame.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture";
+        frame.referrerPolicy = "no-referrer";
+        spotifyPlayer.closest(".spotify-listen").append(frame);
+        spotifyPlayer.hidden = true;
+        frame.focus();
+    }, { once: true });
+}
+
 const lookup = document.querySelector("[data-lookup]");
 if (lookup) {
     const form = document.querySelector(".edit-form");
@@ -86,6 +172,7 @@ if (lookup) {
     const coverUrl = form.elements.namedItem("CoverUrl");
     const artists = form.elements.namedItem("ArtistId");
     const newArtist = form.elements.namedItem("NewArtistName");
+    const currentId = form.elements.namedItem("Id").value;
     const filled = new Map();
     let lookupRequest;
 
@@ -110,10 +197,12 @@ if (lookup) {
             Name: candidate.title, Format: candidate.format, Label: candidate.label,
             Country: candidate.country, Year: candidate.releaseYear, PressingYear: candidate.year,
             CatalogNumber: candidate.catalogueNumber, Genre: candidate.genre, Barcode: candidate.barcode,
-            CoverUrl: candidate.coverUrl
+            CoverUrl: candidate.coverUrl,
+            SpotifyUrl: candidate.spotifyUrl
         };
         for (const [name, value] of Object.entries(fields)) {
             const control = form.elements.namedItem(name);
+            if (name === "SpotifyUrl" && control.value && control.value !== filled.get(name)) continue;
             if (value) {
                 control.value = String(value).slice(0, control.maxLength > 0 ? control.maxLength : undefined);
                 filled.set(name, control.value);
@@ -123,7 +212,8 @@ if (lookup) {
             }
         }
         form.elements.namedItem("MusicBrainzId").value = candidate.id || "";
-        form.elements.namedItem("DiscogsId").value = candidate.discogsId || "";
+        form.elements.namedItem("DiscogsId").value = candidate.discogsId || candidate.linkedDiscogsId || "";
+        if (candidate.medium != null) form.elements.namedItem("Medium").value = String(candidate.medium);
         const kind = ["Album", "Single", "EP", "Compilation"].indexOf(candidate.kind);
         if (kind >= 0) form.elements.namedItem("Kind").value = String(kind);
         const normalize = text => text.trim().toLowerCase();
@@ -152,6 +242,7 @@ if (lookup) {
     }
 
     function showDuplicates(matches = []) {
+        matches = matches.filter(match => String(match.id) !== currentId);
         duplicates.replaceChildren();
         duplicates.hidden = matches.length === 0;
         if (duplicates.hidden) return;
@@ -263,6 +354,8 @@ if (lookup) {
         field.value = "Barcode";
         document.getElementById("lookup-artist").value = "";
         term.value = event.detail;
+        const barcode = form.elements.namedItem("Barcode");
+        if (!barcode.value.trim()) barcode.value = event.detail;
         findPressings();
     });
     lookup.addEventListener("keydown", event => {
@@ -271,4 +364,8 @@ if (lookup) {
             findPressings();
         }
     });
+    if (lookup.dataset.initialLookup === "Barcode")
+        document.getElementById("scan-start")?.focus({ preventScroll: true });
+    if (lookup.dataset.initialLookup === "Catalogue")
+        term.focus({ preventScroll: true });
 }

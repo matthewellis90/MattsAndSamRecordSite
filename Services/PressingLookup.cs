@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MattsRecords.Models;
 
 namespace MattsRecords.Services;
 
@@ -8,6 +9,9 @@ public sealed record PressingCandidate(string Title, string Artist, string Catal
     int? ExistingRecordId = null)
 {
     public IReadOnlyList<RecordMatch> CollectionMatches { get; init; } = [];
+    public string? SpotifyUrl { get; init; }
+    public int? LinkedDiscogsId { get; init; }
+    public RecordMedium? Medium { get; init; }
 }
 
 public sealed class PressingLookup(HttpClient client)
@@ -16,7 +20,7 @@ public sealed class PressingLookup(HttpClient client)
     private static DateTimeOffset nextRequest;
 
     public async Task<IReadOnlyList<PressingCandidate>> FindAsync(string field, string term, string? artist,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool requireComplete = false, bool broadVinylSearch = false)
     {
         var identifier = term.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? term;
         if (field != "Barcode" && Guid.TryParse(identifier, out var pressingId))
@@ -34,25 +38,30 @@ public sealed class PressingLookup(HttpClient client)
         };
         if (!string.IsNullOrWhiteSpace(artist))
             query += " AND artist:" + Quoted(artist);
+        if (broadVinylSearch)
+            query += " AND format:vinyl";
 
         using var json = await ReadMusicBrainzAsync(
-            $"release?query={Uri.EscapeDataString(query)}&limit={(field == "Barcode" ? 50 : 12)}&fmt=json",
+            $"release?query={Uri.EscapeDataString(query)}&limit={(requireComplete || broadVinylSearch ? 100 : field == "Barcode" ? 50 : 12)}&fmt=json",
             cancellationToken);
         if (json is null)
             return [];
 
-        var candidates = Array(json.RootElement, "releases").Select(Parse).OfType<PressingCandidate>()
+        var releases = Array(json.RootElement, "releases").ToArray();
+        if (requireComplete && (!json.RootElement.TryGetProperty("count", out var count) ||
+            !count.TryGetInt32(out var total) || total > releases.Length))
+            return [];
+        var candidates = releases.Select(Parse).OfType<PressingCandidate>()
             .Where(candidate => candidate.Title.Length > 0);
         if (field == "Barcode")
-            candidates = candidates.Where(candidate => barcodes.Contains(candidate.Barcode) &&
-                    (candidate.Format.Length == 0 || candidate.Format.Contains("vinyl", StringComparison.OrdinalIgnoreCase)))
-                .OrderByDescending(candidate => candidate.Format.Length > 0);
-        return candidates.Take(12).ToArray();
+            candidates = candidates.Where(candidate => barcodes.Contains(candidate.Barcode))
+                .OrderByDescending(candidate => candidate.Medium.HasValue);
+        return (requireComplete || broadVinylSearch ? candidates : candidates.Take(12)).ToArray();
     }
 
     public async Task<PressingCandidate?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
     {
-        using var json = await ReadMusicBrainzAsync($"release/{id}?inc=artist-credits+labels+release-groups+media+genres&fmt=json",
+        using var json = await ReadMusicBrainzAsync($"release/{id}?inc=artist-credits+labels+release-groups+media+genres+url-rels&fmt=json",
             cancellationToken);
         if (json is null || Parse(json.RootElement) is not { } candidate)
             return null;
@@ -79,7 +88,17 @@ public sealed class PressingLookup(HttpClient client)
             if (candidate.CoverUrl is null && await GroupHasFrontAsync(groupId, cancellationToken))
                 candidate = candidate with { CoverUrl = $"https://coverartarchive.org/release-group/{groupId}/front-500" };
         }
-        return candidate with { IsDetailed = true };
+        var urls = Array(json.RootElement, "relations")
+            .Where(relation => relation.ValueKind == JsonValueKind.Object && relation.TryGetProperty("url", out _))
+            .Select(relation => Text(relation.GetProperty("url"), "resource")).ToArray();
+        var spotify = urls.Select(SpotifyRelease.Normalize).OfType<string>().Distinct().Take(2).ToArray();
+        var discogs = urls.Select(DiscogsLookup.ReleaseId).OfType<int>().Distinct().Take(2).ToArray();
+        return candidate with
+        {
+            IsDetailed = true,
+            SpotifyUrl = spotify.Length == 1 ? spotify[0] : null,
+            LinkedDiscogsId = discogs.Length == 1 ? discogs[0] : null
+        };
     }
 
     public async Task<string?> FindAlbumCoverAsync(string title, string artist, CancellationToken cancellationToken)
@@ -124,14 +143,18 @@ public sealed class PressingLookup(HttpClient client)
 
     private async Task<JsonDocument?> ReadMusicBrainzAsync(string path, CancellationToken cancellationToken)
     {
+        var cooldown = TimeSpan.FromMilliseconds(1150);
         await Gate.WaitAsync(cancellationToken);
         try
         {
             var remaining = nextRequest - DateTimeOffset.UtcNow;
             if (remaining > TimeSpan.Zero)
                 await Task.Delay(remaining, cancellationToken);
-            nextRequest = DateTimeOffset.UtcNow.AddMilliseconds(1150);
             using var response = await client.GetAsync(path, cancellationToken);
+            var retry = response.Headers.RetryAfter;
+            var requestedCooldown = retry?.Delta ?? retry?.Date - DateTimeOffset.UtcNow;
+            if (requestedCooldown > cooldown)
+                cooldown = requestedCooldown.Value;
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 return null;
             response.EnsureSuccessStatusCode();
@@ -147,6 +170,7 @@ public sealed class PressingLookup(HttpClient client)
         }
         finally
         {
+            nextRequest = DateTimeOffset.UtcNow + cooldown;
             Gate.Release();
         }
     }
@@ -170,12 +194,18 @@ public sealed class PressingLookup(HttpClient client)
             ? $"https://coverartarchive.org/release/{id}/front-500" : null;
 
         var genre = ReadGenre(release);
+        var formats = Array(release, "media").Select(medium => VinylSize(Text(medium, "format")))
+            .Where(format => format.Length > 0).ToArray();
+        var medium = RecordMedia.FromFormats(formats);
+        if (formats.Length > 0 && !medium.HasValue)
+            return null;
+        var displayFormats = formats.Distinct().ToArray();
+        var format = formats.Length > 1 && displayFormats.Length == 1 && medium is RecordMedium.CD or RecordMedium.Cassette
+            ? $"{formats.Length} × {displayFormats[0]}" : string.Join(" / ", displayFormats);
         return new PressingCandidate(Text(release, "title"), credits, Text(labelInfo, "catalog-number"), label,
-            Text(release, "barcode"), Text(release, "country"), year,
-            string.Join(" / ", Array(release, "media").Select(medium => VinylSize(Text(medium, "format")))
-                .Where(format => format.Length > 0).Distinct()),
+            Text(release, "barcode"), Text(release, "country"), year, format,
             primary, id, cover, ReadYear(Text(group, "first-release-date")),
-            genre.Length == 0 ? ReadGenre(group) : genre, Text(release, "disambiguation"), false);
+            genre.Length == 0 ? ReadGenre(group) : genre, Text(release, "disambiguation"), false) { Medium = medium };
     }
 
     private static int? ReadYear(string date) =>

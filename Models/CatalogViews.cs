@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace MattsRecords.Models;
 
-public sealed record CatalogView(RecordQuery Query, RecordPage Results, IReadOnlyList<ArtistSummary> Artists,
-    CatalogFacets Facets, IReadOnlyList<Album> Recent);
+public sealed record CatalogView(RecordQuery Query, IReadOnlyList<CatalogSection> Sections, RecordMedium? PagedSection, IReadOnlyList<ArtistSummary> Artists,
+    CatalogFacets Facets, IReadOnlyList<Album> Recent, Guid? ShareToken = null);
+
+public sealed record CatalogSection(RecordMedium Medium, RecordPage Results);
 
 public sealed record ArtistsView(string? Search, IReadOnlyList<ArtistSummary> Artists);
 
@@ -42,7 +44,10 @@ public sealed class RecordForm : IValidatableObject
     [EnumDataType(typeof(RecordKind)), Display(Name = "Release type")]
     public RecordKind Kind { get; set; } = RecordKind.Album;
 
-    [StringLength(100)]
+    [EnumDataType(typeof(RecordMedium)), Display(Name = "Media")]
+    public RecordMedium Medium { get; set; } = RecordMedium.Vinyl;
+
+    [StringLength(100), Display(Name = "Format details")]
     public string? Format { get; set; }
 
     [StringLength(2000)]
@@ -50,6 +55,9 @@ public sealed class RecordForm : IValidatableObject
 
     [Display(Name = "Cover image URL"), StringLength(2048)]
     public string? CoverUrl { get; set; }
+
+    [Display(Name = "Spotify album or track URL"), StringLength(500)]
+    public string? SpotifyUrl { get; set; }
 
     [StringLength(100), Display(Name = "Label")]
     public string? Label { get; set; }
@@ -76,6 +84,8 @@ public sealed class RecordForm : IValidatableObject
 
     public string? Version { get; set; }
 
+    public bool ConfirmPressingReviewed { get; set; }
+
     [BindNever]
     public IReadOnlyList<ArtistSummary> Artists { get; set; } = [];
 
@@ -100,11 +110,26 @@ public sealed class RecordForm : IValidatableObject
         }
         if (!string.IsNullOrWhiteSpace(NewArtistName) && (Id.HasValue || ArtistId.HasValue))
             yield return new ValidationResult("Choose an existing artist or enter a new artist name.", [nameof(NewArtistName)]);
+        if (!string.IsNullOrWhiteSpace(SpotifyUrl) && SpotifyRelease.Normalize(SpotifyUrl) is null)
+            yield return new ValidationResult("Enter an HTTPS Spotify album or track link.", [nameof(SpotifyUrl)]);
+        if (RecordMedia.FromFormat(Format) is RecordMedium specified && specified != Medium)
+            yield return new ValidationResult("Enter format details for the selected media.", [nameof(Format)]);
     }
 }
 
 public static class CatalogValidation
 {
+    public static IEnumerable<string> MissingPressingDetails(Album record)
+    {
+        if (record.Medium == RecordMedium.Vinyl && !VinylSizing.HasSize(record.Format)) yield return "vinyl size";
+        if (string.IsNullOrWhiteSpace(record.Label)) yield return "label";
+        if (string.IsNullOrWhiteSpace(record.CatalogNumber)) yield return "catalogue number";
+        if (string.IsNullOrWhiteSpace(record.Country)) yield return "pressing country";
+        if (!record.PressingYear.HasValue) yield return "pressing year";
+        if (!record.MusicBrainzId.HasValue) yield return "MusicBrainz ID";
+        if (!record.DiscogsId.HasValue) yield return "Discogs ID";
+    }
+
     public static bool TryGetVersion(string? value, out byte[] rowVersion)
     {
         rowVersion = new byte[8];

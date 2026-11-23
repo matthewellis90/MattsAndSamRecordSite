@@ -1,0 +1,32 @@
+@{
+    ViewData["Title"] = "FAQs";
+}
+<section class="shell content-page">
+    <div class="form-panel faq-panel">
+        <h1>Frequently asked questions</h1>
+        <details>
+            <summary>What can I catalogue?</summary>
+            <p>You can catalogue vinyl, CDs and cassettes in the same collection. Use the release type to distinguish albums, singles and compilations, and the media filter to browse one format at a time.</p>
+        </details>
+        <details>
+            <summary>How do I add a release?</summary>
+            <p>Sign in and select <strong>Add a record</strong>. Enter the details yourself, search for a release, or select <strong>Scan barcode</strong> and allow camera access. Review the details returned by Discogs or MusicBrainz, select the edition you own, and save.</p>
+        </details>
+        <details>
+            <summary>What if the camera or release search can’t find my copy?</summary>
+            <p>Try typing the barcode or searching by artist and title. If you can’t find your edition, enter its details from the sleeve or disc. Some editions share a barcode, so check the media, label, and catalogue number before saving.</p>
+        </details>
+        <details>
+            <summary>Who can see my collection?</summary>
+            <p>Your collection is private by default. To let friends browse it, open <strong>Sharing</strong> while signed in and create a read-only link. Anyone with the link can use it until you replace or disable it. See the <a asp-action="Privacy">Privacy page</a> for details.</p>
+        </details>
+        <details>
+            <summary>Can I listen on Spotify or download my collection?</summary>
+            <p>Open a release to use its Spotify player or search for it on Spotify. To download your own collection as a spreadsheet-friendly CSV file, choose <strong>Export CSV</strong> under <strong>Manage</strong>.</p>
+        </details>
+        <details>
+            <summary>How do I confirm my email or reset my password?</summary>
+            <p>Follow the confirmation link sent to your email address when you register. If you forget your password, use <a asp-controller="Recovery" asp-action="Forgot">Forgot password</a> and enter your registered email address. Check your spam folder if either email is missing.</p>
+        </details>
+    </div>
+</section>

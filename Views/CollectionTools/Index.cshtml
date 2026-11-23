@@ -15,6 +15,7 @@
             else
             {
                 <a class="button" asp-controller="AccountEmail" asp-action="Index">Account settings</a>
+                <a class="button" asp-controller="Sharing" asp-action="Settings">Share collection</a>
             }
         </div>
     </div>
@@ -22,8 +23,10 @@
         <div><label for="queue">Queue</label>
             <select id="queue" name="queue">
                 <option value="review" selected="@(Model.Queue == "review")">Pressing review (@Model.PendingReviews)</option>
+                <option value="estimated" selected="@(Model.Queue == "estimated")">Estimated pressings (@Model.Estimated)</option>
                 <option value="cover" selected="@(Model.Queue == "cover")">Missing cover art (@Model.MissingCovers)</option>
                 <option value="format" selected="@(Model.Queue == "format")">Missing vinyl details (@Model.MissingFormats)</option>
+                <option value="size" selected="@(Model.Queue == "size")">Missing vinyl size (@Model.MissingSizes)</option>
                 <option value="all" selected="@(Model.Queue == "all")">All records</option>
             </select>
         </div>
@@ -40,13 +43,29 @@
         <ul class="artist-list review-list">
             @foreach (var record in Model.Items)
             {
+                var missing = CatalogValidation.MissingPressingDetails(record).ToArray();
                 <li>
-                    <div>
+                    <div class="review-item">
                         <h3><a asp-controller="Album" asp-action="Details" asp-route-id="@record.Id">@record.Name</a></h3>
-                        <p>@record.DisplayArtist @if (record.CatalogNumber is not null) { <span> · @record.CatalogNumber</span> } @if (!string.IsNullOrWhiteSpace(record.Format)) { <span> · @record.Format</span> }</p>
-                        <p>@(record.PressingReviewed ? "Pressing reviewed" : "Review pending") @if (!record.HasCover) { <span> · Cover missing</span> }</p>
+                        <p>@record.DisplayArtist · @record.Medium @if (record.CatalogNumber is not null) { <span> · @record.CatalogNumber</span> } @if (RecordMedia.HasDetails(record.Medium, record.Format)) { <span> · @record.Format</span> }</p>
+                        <p>@(record.PressingReviewed ? "Pressing reviewed" : record.PressingEstimated ? "Estimated pressing" : missing.Length > 0 ? "Review pending" : "Pressing details complete") @if (!record.HasCover) { <span> · Cover missing</span> }</p>
+                        @if (missing.Length > 0)
+                        {
+                            <p class="review-missing"><strong>Missing</strong> @string.Join(", ", missing)</p>
+                        }
+                        <div class="review-actions">
+                            <a class="button" asp-controller="Album" asp-action="Edit" asp-route-id="@record.Id" asp-route-lookup="Barcode"
+                               asp-fragment="pressing-lookup-title" aria-label="Scan barcode for @record.Name">Scan barcode</a>
+                            <a class="button" asp-controller="Album" asp-action="Edit" asp-route-id="@record.Id" asp-route-lookup="Catalogue"
+                               asp-fragment="pressing-lookup-title" aria-label="Look up catalogue number for @record.Name">Look up catalogue number</a>
+                            @if (record.Medium == RecordMedium.Vinyl && !VinylSizing.HasSize(record.Format))
+                            {
+                                <a class="button" asp-controller="Sleeve" asp-action="Edit" asp-route-id="@record.Id"
+                                   asp-fragment="vinyl-size" aria-label="Set vinyl size for @record.Name">Set vinyl size</a>
+                            }
+                            <a class="quiet-link" asp-controller="Sleeve" asp-action="Edit" asp-route-id="@record.Id" aria-label="Review sleeves and pressing for @record.Name">Sleeves and review</a>
+                        </div>
                     </div>
-                    <a class="button" asp-controller="Sleeve" asp-action="Edit" asp-route-id="@record.Id" aria-label="Review @record.Name by @record.DisplayArtist">Review</a>
                 </li>
             }
         </ul>

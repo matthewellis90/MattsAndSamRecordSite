@@ -7,7 +7,7 @@ namespace MattsRecords.Controllers;
 
 public sealed class ArtistController(RecordRepository records) : Controller
 {
-    [HttpGet("artists", Order = 0)]
+    [Authorize, HttpGet("artists", Order = 0)]
     [HttpGet("Artist", Order = 1)]
     [HttpGet("Artist/Index", Order = 2)]
     public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>

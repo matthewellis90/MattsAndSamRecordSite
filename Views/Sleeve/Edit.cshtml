@@ -2,13 +2,22 @@
 @{
     ViewData["Title"] = "Sleeves and pressing review";
     var record = Model.Record;
+    var missing = CatalogValidation.MissingPressingDetails(record).ToArray();
 }
 <section class="shell content-page">
     <a class="back-link" asp-controller="CollectionTools" asp-action="Index">Manage the collection</a>
     <div class="form-panel">
         <h1>Sleeves and pressing review</h1>
         <p>@record.Name · @record.DisplayArtist</p>
-        <p>Saved sleeve photos appear on the public record page. Choose JPEG, PNG or WebP, up to 14 MB each.</p>
+        @if (missing.Length > 0)
+        {
+            <p class="review-missing"><strong>Missing</strong> @string.Join(", ", missing)</p>
+        }
+        <div class="review-actions">
+            <a class="button" asp-controller="Album" asp-action="Edit" asp-route-id="@record.Id" asp-route-lookup="Barcode" asp-fragment="pressing-lookup-title">Scan barcode</a>
+            <a class="button" asp-controller="Album" asp-action="Edit" asp-route-id="@record.Id" asp-route-lookup="Catalogue" asp-fragment="pressing-lookup-title">Look up catalogue number</a>
+        </div>
+        <p>Choose JPEG, PNG or WebP sleeve photos up to 14 MB each.</p>
         <form asp-action="Save" asp-route-id="@record.Id" method="post" enctype="multipart/form-data" class="edit-form">
             <input asp-for="Version" type="hidden">
             <div asp-validation-summary="All" class="validation"></div>
@@ -34,15 +43,21 @@
             </div>
             <div class="field-pair">
                 <div><label asp-for="CatalogNumber"></label><input asp-for="CatalogNumber" maxlength="100"></div>
-                <div>
-                    <label asp-for="Format"></label>
-                    <input asp-for="Format" maxlength="100" list="vinyl-formats" placeholder="e.g. 12-inch vinyl">
-                    <datalist id="vinyl-formats">
-                        <option value="7-inch vinyl"></option>
-                        <option value="10-inch vinyl"></option>
-                        <option value="12-inch vinyl"></option>
-                    </datalist>
-                </div>
+                @if (record.Medium == RecordMedium.Vinyl)
+                {
+                    <div id="vinyl-size">
+                        <label asp-for="Size"></label>
+                        <select asp-for="Size" asp-items="Html.GetEnumSelectList<VinylSize>()"></select>
+                        @if (VinylSizing.FromFormat(record.Format) == VinylSize.KeepCurrent)
+                        {
+                            <p class="field-hint">Current format: @record.Format</p>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div><label asp-for="Format"></label><input asp-for="Format" maxlength="100"></div>
+                }
             </div>
             <label class="checkbox"><input asp-for="Reviewed"> I’ve reviewed this pressing</label>
             <div class="actions">

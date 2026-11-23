@@ -1,0 +1,28 @@
+@model Album
+@{
+    ViewData["DescribeSleeve"] = true;
+}
+@if (Model.BackSleeveKey is Guid back)
+{
+    var backUrl = ViewData["SharedToken"] is Guid token
+        ? Url.RouteUrl("SharedSleeve", new { token, id = Model.Id, side = 1, revision = back })
+        : Url.RouteUrl("SleeveImage", new { id = Model.Id, side = 1, revision = back });
+    <div class="sleeve-gallery" data-sleeve-gallery>
+        <div class="sleeve-switch" role="group" aria-label="Sleeve side" data-sleeve-controls hidden>
+            <button class="button" type="button" aria-controls="front-sleeve" aria-pressed="true">Front sleeve</button>
+            <button class="button" type="button" aria-controls="rear-sleeve" aria-pressed="false">Back sleeve</button>
+        </div>
+        <div id="front-sleeve" data-sleeve-side>
+            <partial name="_RecordArt" model="Model" />
+        </div>
+        <figure id="rear-sleeve" class="sleeve-rear" data-sleeve-side>
+            <img src="@backUrl" alt="Back sleeve of @Model.Name" loading="lazy" decoding="async">
+        </figure>
+    </div>
+}
+else
+{
+    <div class="sleeve-gallery">
+        <partial name="_RecordArt" model="Model" />
+    </div>
+}

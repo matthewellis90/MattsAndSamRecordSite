@@ -1,0 +1,36 @@
+@{
+    ViewData["Title"] = "Welcome";
+}
+<section class="hero welcome-hero" aria-labelledby="welcome-title">
+    <div class="shell hero-inner">
+        <div class="hero-copy">
+            <h1 class="site-title" id="welcome-title">Welcome to The Record Room</h1>
+            <p>The perfect place to catalogue your music collection, including vinyl, CDs and cassettes.</p>
+            <p>Enter release details by hand, search for a release, or scan a barcode with your phone’s camera. The Record Room looks up the available information from Discogs and MusicBrainz.</p>
+            <div class="actions welcome-actions">
+                <a class="button button-accent" asp-controller="Admin" asp-action="Register">Create an account</a>
+                <a class="button" asp-controller="Admin" asp-action="Login">Sign in</a>
+            </div>
+        </div>
+        <div class="hero-image" aria-hidden="true"></div>
+    </div>
+</section>
+<section class="shell welcome-features" aria-labelledby="welcome-features-title">
+    <h2 id="welcome-features-title">Build, browse and share your collection</h2>
+    <ul class="welcome-checklist">
+        <li><span aria-hidden="true">✓</span><strong>Easy listing</strong><p>Type, search or scan to add a release.</p></li>
+        <li><span aria-hidden="true">✓</span><strong>Simple searching</strong><p>Search and filter your collection to find a release quickly.</p></li>
+        <li><span aria-hidden="true">✓</span><strong>Smart sharing</strong><p>Send friends a read-only link when you choose to share.</p></li>
+    </ul>
+</section>
+<section class="shell welcome-tribute" aria-labelledby="tribute-name">
+    <div class="tribute-panel">
+        <img src="~/images/stephen-charles-ellis.png" asp-append-version="true" alt="Portrait of Stephen Charles Ellis"
+             width="498" height="444" loading="lazy" decoding="async">
+        <div>
+            <p class="tribute-message">Lovingly created in memory of the man who sparked my love for music.</p>
+            <h2 id="tribute-name">Stephen Charles Ellis</h2>
+            <p class="tribute-years">1953-2023</p>
+        </div>
+    </div>
+</section>

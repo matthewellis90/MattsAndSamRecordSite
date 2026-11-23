@@ -18,7 +18,9 @@ if (args is ["--hash-admin-password"])
     return;
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var estimatePressings = args.Length == 4 && args[0] == "--estimate-pressings";
+var enrichPressings = estimatePressings || (args.Length is 3 or 4 && args[0] == "--enrich-pressings");
+var builder = WebApplication.CreateBuilder(enrichPressings ? [] : args);
 var development = builder.Environment.IsDevelopment();
 const string lookupUserAgent = "TheRecordRoom/2.1 (https://github.com/matthewellis90/RecordRoomEllisCasa)";
 
@@ -29,18 +31,22 @@ builder.Services.AddSingleton<CollectionDatabases>();
 builder.Services.AddScoped<ICollectionAccounts, CollectionAccounts>();
 builder.Services.AddScoped<IAccountRecovery, AccountRecovery>();
 builder.Services.AddScoped<IAccountEmail, AccountEmail>();
+builder.Services.AddScoped<ICollectionSharing, CollectionSharing>();
+builder.Services.AddScoped<PressingBatch>();
 builder.Services.Configure<AccountMailOptions>(builder.Configuration.GetSection("AccountMail"));
 builder.Services.AddSingleton<IAccountMail, SmtpAccountMail>();
 builder.Services.AddHostedService<RecoveryMailWorker>();
 builder.Services.AddDbContext<RecordContext>((services, options) => options.UseSqlServer(
     services.GetRequiredService<CollectionDatabases>().ForRequest(services.GetRequiredService<IHttpContextAccessor>().HttpContext?.User)));
 builder.Services.AddScoped<RecordRepository>();
-builder.Services.AddHttpClient<PressingLookup>(client =>
+var musicBrainzClient = builder.Services.AddHttpClient<PressingLookup>(client =>
 {
     client.BaseAddress = new Uri("https://musicbrainz.org/ws/2/");
-    client.Timeout = TimeSpan.FromSeconds(10);
+    client.Timeout = enrichPressings ? TimeSpan.FromMinutes(3) : TimeSpan.FromSeconds(10);
     client.DefaultRequestHeaders.UserAgent.ParseAdd(lookupUserAgent);
 });
+if (enrichPressings)
+    musicBrainzClient.AddHttpMessageHandler(() => new MusicBrainzBatchRetry());
 builder.Services.AddHttpClient<DiscogsLookup>(client =>
 {
     client.BaseAddress = new Uri("https://api.discogs.com/");
@@ -125,6 +131,31 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+if (enrichPressings)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    using var stop = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, eventArgs) =>
+    {
+        eventArgs.Cancel = true;
+        stop.Cancel();
+    };
+    var accounts = scope.ServiceProvider.GetRequiredService<ICollectionAccounts>();
+    var account = await accounts.FindByNameAsync(args[1], stop.Token);
+    if (account is not { State: 1 })
+    {
+        Console.Error.WriteLine("The specified personal collection could not be found or is not ready.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var databases = scope.ServiceProvider.GetRequiredService<CollectionDatabases>();
+    await using var catalog = databases.OpenPersonalCatalog(account.Id);
+    await scope.ServiceProvider.GetRequiredService<PressingBatch>().RunAsync(catalog, args[2],
+        args.Length == 4 ? args[3] : null, stop.Token, estimatePressings);
+    return;
+}
+
 app.UseForwardedHeaders();
 
 if (!development)
@@ -139,9 +170,15 @@ app.Use(async (context, next) =>
 {
     var headers = context.Response.Headers;
     headers["Content-Security-Policy"] =
-        "default-src 'self'; img-src 'self' https: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+        "default-src 'self'; img-src 'self' https: data:; frame-src https://open.spotify.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
     headers["X-Content-Type-Options"] = "nosniff";
     headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    if (context.Request.Path.StartsWithSegments("/shared"))
+    {
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["X-Robots-Tag"] = "noindex, nofollow";
+        headers.CacheControl = "private, no-store";
+    }
     await next();
 });
 
@@ -155,7 +192,7 @@ app.Use(async (context, next) =>
         context.Response.Headers.CacheControl = "no-store";
     if (CollectionSession.IsPersonal(context.User) && !CollectionSession.IsReady(context.User) &&
         context.Request.Path != "/Admin/Preparing" && context.Request.Path != "/Admin/Logout" &&
-        !context.Request.Path.StartsWithSegments("/Account"))
+        !context.Request.Path.StartsWithSegments("/Account") && !context.Request.Path.StartsWithSegments("/shared"))
     {
         context.Response.Redirect("/Admin/Preparing");
         return;

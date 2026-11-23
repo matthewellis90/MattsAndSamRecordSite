@@ -1,8 +1,19 @@
 @model CatalogView
 @{
     var query = Model.Query;
-    var results = Model.Results;
+    var resultCount = Model.Sections.Sum(section => section.Results.TotalCount);
     var isFiltered = query.HasFilters;
+    var filters = new (string Key, string? Value, string? Label)[] {
+        ("search", query.Search, query.Search),
+        ("kind", query.Kind?.ToString(), query.Kind?.ToString()),
+        ("medium", query.Medium?.ToString(), query.Medium?.ToString()),
+        ("artistId", query.ArtistId?.ToString(), Model.Artists.FirstOrDefault(artist => artist.Id == query.ArtistId)?.Name ?? "Selected artist"),
+        ("decade", query.Decade?.ToString(), $"{query.Decade}s"),
+        ("format", query.Format, query.Format == RecordQuery.UnrecordedFormat ? "Vinyl (details not recorded)" : query.Format),
+        ("genre", query.Genre, query.Genre),
+        ("label", query.Label, query.Label)
+    };
+    var activeFilters = filters.Where(filter => !string.IsNullOrWhiteSpace(filter.Value)).ToArray();
     var sorts = new[] {
         (RecordSort.Title, "Title A–Z"),
         (RecordSort.Artist, "Artist A–Z"),
@@ -17,13 +28,13 @@
             <div class="hero-copy">
                 @if (CollectionSession.IsPersonal(User))
                 {
-                    <h1>Your record<br>collection<span>.</span></h1>
+                    <h1>Your music collection<span>.</span></h1>
                     <p>Browse and manage the records you’ve added.</p>
                 }
                 else
                 {
                     <h1 class="site-title">@SiteBrand.Name<span>.</span></h1>
-                    <p>Browse the public vinyl collection or create a private one of your own.</p>
+                    <p>Browse and manage the owner collection.</p>
                 }
                 <a class="button button-accent" href="#collection">Browse the collection</a>
             </div>
@@ -33,18 +44,20 @@
 }
 @if (Model.Recent.Count > 0)
 {
-    <section class="collection shell recent-collection" aria-labelledby="recent-title">
-        <div class="section-head">
+    <details class="collection shell recent-collection" data-recent-collection>
+        <summary class="collection-toggle">
             <h2 id="recent-title">Recently added</h2>
+        </summary>
+        <div class="recent-content">
             <a asp-action="Index" asp-route-sort="Recent" asp-fragment="collection">View all by date added</a>
+            <ul class="record-grid">
+                @foreach (var record in Model.Recent)
+                {
+                    <partial name="_RecordCard" model="record" />
+                }
+            </ul>
         </div>
-        <ul class="record-grid">
-            @foreach (var record in Model.Recent)
-            {
-                <partial name="_RecordCard" model="record" />
-            }
-        </ul>
-    </section>
+    </details>
 }
 <section class="collection shell" id="collection" aria-labelledby="collection-title">
     <div class="section-head">
@@ -58,134 +71,197 @@
         }
         @if (User.Identity?.IsAuthenticated == true)
         {
-            <a class="button button-accent" asp-controller="Album" asp-action="Add">Add a record</a>
-        }
-    </div>
-    <form class="filter-bar" asp-controller="Home" asp-action="Index" asp-fragment="collection" method="get">
-        <div class="filter-search">
-            <label for="search">Search</label>
-            <input id="search" name="search" type="search" value="@query.Search" placeholder="Title, artist, or year" maxlength="200">
-        </div>
-        <div>
-            <label for="kind">Release type</label>
-            <select id="kind" name="kind">
-                <option value="">All releases</option>
-                @foreach (var kind in Enum.GetValues<RecordKind>())
+            <div class="collection-heading-actions">
+                @if (Model.ShareToken is Guid shareToken)
                 {
-                    <option value="@kind" selected="@(query.Kind == kind)">@kind</option>
+                    <a class="button" asp-route="SharedCollection" asp-route-token="@shareToken">View shared collection</a>
                 }
-            </select>
-        </div>
-        <div>
-            <label for="artist">Artist</label>
-            <select id="artist" name="artistId">
-                <option value="">All artists</option>
-                @foreach (var artist in Model.Artists)
+                else if (CollectionSession.IsReady(User))
                 {
-                    <option value="@artist.Id" selected="@(query.ArtistId == artist.Id)">@artist.Name</option>
+                    <a class="button" asp-controller="Sharing" asp-action="Settings">Share collection</a>
                 }
-            </select>
-        </div>
-        <div>
-            <label for="sort">Sort by</label>
-            <select id="sort" name="sort">
-                @foreach (var (value, label) in sorts)
-                {
-                    <option value="@value" selected="@(query.Sort == value)">@label</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label for="decade">Decade</label>
-            <select id="decade" name="decade">
-                <option value="">All decades</option>
-                @foreach (var decade in Model.Facets.Decades)
-                {
-                    <option value="@decade" selected="@(query.Decade == decade)">@(decade)s</option>
-                }
-            </select>
-        </div>
-        <div>
-            <label for="format">Format</label>
-            <select id="format" name="format">
-                <option value="">Any format</option>
-                <option value="@Album.VinylFormat" selected="@(string.Equals(query.Format?.Trim(), Album.VinylFormat, StringComparison.OrdinalIgnoreCase))">Vinyl</option>
-                @foreach (var format in Model.Facets.Formats)
-                {
-                    <option value="@format" selected="@(string.Equals(query.Format?.Trim(), format, StringComparison.OrdinalIgnoreCase))">@format</option>
-                }
-                <option value="@RecordQuery.UnrecordedFormat" selected="@(query.Format?.Trim() == RecordQuery.UnrecordedFormat)">Vinyl (details not recorded)</option>
-            </select>
-        </div>
-        @foreach (var facet in new[] {
-            ("genre", "Genre", query.Genre, Model.Facets.Genres),
-            ("label", "Label", query.Label, Model.Facets.Labels)
-        })
-        {
-            <div>
-                <label for="@facet.Item1">@facet.Item2</label>
-                <select id="@facet.Item1" name="@facet.Item1" disabled="@(facet.Item4.Length == 0)">
-                    <option value="">Any</option>
-                    @foreach (var option in facet.Item4)
-                    {
-                        <option value="@option" selected="@(string.Equals(facet.Item3, option, StringComparison.OrdinalIgnoreCase))">@option</option>
-                    }
-                </select>
+                <a class="button button-accent" asp-controller="Album" asp-action="Add">Add a record</a>
             </div>
         }
-        <div>
-            <label for="list">View</label>
-            <select id="list" name="list">
-                <option value="false" selected="@(!query.List)">Cover grid</option>
-                <option value="true" selected="@query.List">Compact list</option>
-            </select>
+    </div>
+    <form class="catalog-controls" asp-controller="Home" asp-action="Index" asp-fragment="collection" method="get" role="search" aria-label="Search and filter records">
+        <div class="catalog-search">
+            <label class="visually-hidden" for="search">Search records</label>
+            <input id="search" name="search" type="search" value="@query.Search" placeholder="Search titles, artists, years…" maxlength="200" autocomplete="off"
+                   data-suggest="@Url.Action("Suggest", "Home")" aria-controls="catalog-suggestions">
+            <button type="submit" class="button button-solid">Search</button>
+            <ul id="catalog-suggestions" class="suggestions" aria-label="Matching records" hidden></ul>
         </div>
-        <button type="submit" class="button button-solid">Apply</button>
+        <details class="catalog-filters" data-catalog-filters>
+            <summary class="button">Filters <span class="filter-chevron" aria-hidden="true"></span></summary>
+            <div class="filter-bar">
+                <div>
+                    <label for="kind">Release type</label>
+                    <select id="kind" name="kind">
+                        <option value="">All releases</option>
+                        @foreach (var kind in Enum.GetValues<RecordKind>())
+                        {
+                            <option value="@kind" selected="@(query.Kind == kind)">@kind</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="medium">Media</label>
+                    <select id="medium" name="medium">
+                        <option value="">All media</option>
+                        @foreach (var medium in Enum.GetValues<RecordMedium>())
+                        {
+                            <option value="@medium" selected="@(query.Medium == medium)">@medium</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="artist">Artist</label>
+                    <select id="artist" name="artistId">
+                        <option value="">All artists</option>
+                        @foreach (var artist in Model.Artists)
+                        {
+                            <option value="@artist.Id" selected="@(query.ArtistId == artist.Id)">@artist.Name</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="sort">Sort by</label>
+                    <select id="sort" name="sort">
+                        @foreach (var (value, label) in sorts)
+                        {
+                            <option value="@value" selected="@(query.Sort == value)">@label</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="decade">Decade</label>
+                    <select id="decade" name="decade">
+                        <option value="">All decades</option>
+                        @foreach (var decade in Model.Facets.Decades)
+                        {
+                            <option value="@decade" selected="@(query.Decade == decade)">@(decade)s</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="format">Format details</label>
+                    <select id="format" name="format">
+                        <option value="">Any format</option>
+                        @if (string.Equals(query.Format?.Trim(), Album.VinylFormat, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <option value="@Album.VinylFormat" selected>Vinyl</option>
+                        }
+                        @foreach (var format in Model.Facets.Formats)
+                        {
+                            <option value="@format" selected="@(string.Equals(query.Format?.Trim(), format, StringComparison.OrdinalIgnoreCase))">@format</option>
+                        }
+                        <option value="@RecordQuery.UnrecordedFormat" selected="@(query.Format?.Trim() == RecordQuery.UnrecordedFormat)">Vinyl (details not recorded)</option>
+                    </select>
+                </div>
+                @foreach (var facet in new[] {
+                    ("genre", "Genre", query.Genre, Model.Facets.Genres),
+                    ("label", "Label", query.Label, Model.Facets.Labels)
+                })
+                {
+                    <div>
+                        <label for="@facet.Item1">@facet.Item2</label>
+                        <select id="@facet.Item1" name="@facet.Item1" disabled="@(facet.Item4.Length == 0)">
+                            <option value="">Any</option>
+                            @foreach (var option in facet.Item4)
+                            {
+                                <option value="@option" selected="@(string.Equals(facet.Item3, option, StringComparison.OrdinalIgnoreCase))">@option</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div>
+                    <label for="list">View</label>
+                    <select id="list" name="list">
+                        <option value="false" selected="@(!query.List)">Cover grid</option>
+                        <option value="true" selected="@query.List">Compact list</option>
+                    </select>
+                </div>
+                <button type="submit" class="button button-solid">Apply filters</button>
+            </div>
+        </details>
     </form>
+    @if (activeFilters.Length > 0)
+    {
+        <ul class="filter-chips" aria-label="Active filters">
+            @foreach (var filter in activeFilters)
+            {
+                var route = activeFilters.Where(item => item.Key != filter.Key).ToDictionary(item => item.Key, item => item.Value!);
+                route["sort"] = query.Sort.ToString();
+                if (query.List) route["list"] = "true";
+                <li><a asp-controller="Home" asp-action="Index" asp-fragment="collection" asp-all-route-data="route"
+                       aria-label="Remove filter @filter.Label">@filter.Label <span aria-hidden="true">×</span></a></li>
+            }
+        </ul>
+    }
     <div class="results-info">
         <a asp-action="Surprise">Pick a record for me</a>
-        <p>@results.TotalCount @(results.TotalCount == 1 ? "record" : "records")</p>
+        <p>@resultCount @(resultCount == 1 ? "record" : "records")</p>
         @if (isFiltered)
         {
             <a asp-controller="Home" asp-action="Index" asp-fragment="collection">Clear filters</a>
         }
     </div>
-    @if (results.Items.Count == 0)
+    @if (isFiltered && resultCount == 0)
     {
         <div class="empty">
-            <h2>@(isFiltered ? "No matching records" : "The collection is empty")</h2>
-            <p>@(isFiltered ? "Try a different title, artist, or release type." : "Records will appear here when they are added.")</p>
+            <h2>No matching records</h2>
+            <p>Try a different title, artist, or release type.</p>
         </div>
     }
     else
     {
-        <ul class="record-grid @(query.List ? "record-list" : "")">
-            @foreach (var record in results.Items)
-            {
-                <partial name="_RecordCard" model="record" />
-            }
-        </ul>
-    }
-    @if (results.TotalPages > 1)
-    {
-        <nav class="pagination" aria-label="Collection pages">
-            @if (results.Page > 1)
-            {
-                <a class="button" asp-controller="Home" asp-action="Index" asp-fragment="collection"
-                   asp-route-search="@query.Search" asp-route-kind="@query.Kind" asp-route-artistId="@query.ArtistId"
-                   asp-route-format="@query.Format" asp-route-label="@query.Label" asp-route-genre="@query.Genre"
-                   asp-route-decade="@query.Decade" asp-route-list="@query.List"
-                   asp-route-sort="@query.Sort" asp-route-page="@(results.Page - 1)">Previous</a>
-            }
-            <span>Page @results.Page of @results.TotalPages</span>
-            @if (results.Page < results.TotalPages)
-            {
-                <a class="button" asp-controller="Home" asp-action="Index" asp-fragment="collection"
-                   asp-route-search="@query.Search" asp-route-kind="@query.Kind" asp-route-artistId="@query.ArtistId"
-                   asp-route-format="@query.Format" asp-route-label="@query.Label" asp-route-genre="@query.Genre"
-                   asp-route-decade="@query.Decade" asp-route-list="@query.List"
-                   asp-route-sort="@query.Sort" asp-route-page="@(results.Page + 1)">Next</a>
-            }
-        </nav>
+        @foreach (var section in Model.Sections.Where(section => !isFiltered || section.Results.TotalCount > 0))
+        {
+            var results = section.Results;
+            var heading = section.Medium switch { RecordMedium.CD => "CDs", RecordMedium.Cassette => "Cassettes", _ => "Vinyl" };
+            var fragment = $"media-{section.Medium.ToString().ToLowerInvariant()}";
+            var expanded = Model.PagedSection == section.Medium ||
+                (results.TotalCount > 0 && (isFiltered || query.List || query.Sort != RecordSort.Title));
+            <details class="media-section" id="@fragment" open="@expanded">
+                <summary class="collection-toggle">
+                    <h3>@heading</h3>
+                    <span class="media-count">@results.TotalCount @(results.TotalCount == 1 ? "record" : "records")</span>
+                </summary>
+                @if (results.TotalCount == 0)
+                {
+                    <p class="media-empty">No records in this section yet.</p>
+                }
+                else
+                {
+                    <ul class="record-grid @(query.List ? "record-list" : "")">
+                        @foreach (var record in results.Items)
+                        {
+                            <partial name="_RecordCard" model="record" />
+                        }
+                    </ul>
+                    @if (results.TotalPages > 1)
+                    {
+                        var route = activeFilters.ToDictionary(filter => filter.Key, filter => filter.Value!);
+                        route["sort"] = query.Sort.ToString();
+                        route["section"] = section.Medium.ToString();
+                        if (query.List) route["list"] = "true";
+                        <nav class="pagination" aria-label="@heading pages">
+                            @if (results.Page > 1)
+                            {
+                                <a class="button" asp-action="Index" asp-all-route-data="route" asp-fragment="@fragment"
+                                   asp-route-page="@(results.Page - 1)">Previous</a>
+                            }
+                            <span>Page @results.Page of @results.TotalPages</span>
+                            @if (results.Page < results.TotalPages)
+                            {
+                                <a class="button" asp-action="Index" asp-all-route-data="route" asp-fragment="@fragment"
+                                   asp-route-page="@(results.Page + 1)">Next</a>
+                            }
+                        </nav>
+                    }
+                }
+            </details>
+        }
     }
 </section>

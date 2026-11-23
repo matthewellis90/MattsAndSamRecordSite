@@ -24,12 +24,13 @@ public enum RecordChange
     ArtistInUse
 }
 
-public sealed class RecordQuery
+public sealed record RecordQuery
 {
     public const string UnrecordedFormat = "~unrecorded";
 
     public string? Search { get; init; }
     public RecordKind? Kind { get; init; }
+    public RecordMedium? Medium { get; init; }
     public int? ArtistId { get; init; }
     public int? Decade { get; init; }
     public string? Format { get; init; }
@@ -39,7 +40,9 @@ public sealed class RecordQuery
     public RecordSort Sort { get; init; } = RecordSort.Title;
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 24;
-    public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || Kind.HasValue || ArtistId.HasValue || Decade.HasValue ||
+    public RecordMedium? EffectiveMedium => Medium ??
+        (string.Equals(Format?.Trim(), Album.VinylFormat, StringComparison.OrdinalIgnoreCase) ? RecordMedium.Vinyl : null);
+    public bool HasFilters => !string.IsNullOrWhiteSpace(Search) || Kind.HasValue || Medium.HasValue || ArtistId.HasValue || Decade.HasValue ||
         !string.IsNullOrWhiteSpace(Format) || !string.IsNullOrWhiteSpace(Genre) || !string.IsNullOrWhiteSpace(Label);
     public bool ShowRecent => !HasFilters && Page <= 1 && Sort == RecordSort.Title && !List;
 }
@@ -55,7 +58,7 @@ public sealed class RecordRepository(RecordContext context)
 {
     private const string SearchCollation = "Latin1_General_100_CI_AI_SC";
 
-    public async Task<RecordPage> BrowseAsync(RecordQuery query, CancellationToken cancellationToken)
+    public async Task<RecordPage> BrowseAsync(RecordQuery query, CancellationToken cancellationToken, bool allowFuzzyMatch = true)
     {
         IQueryable<Album> records = context.Albums.AsNoTracking().Include(album => album.Artist);
         if (query.Kind is { } kind)
@@ -74,10 +77,14 @@ public sealed class RecordRepository(RecordContext context)
             records = records.Where(record => record.Year >= start && record.Year < start + 10);
         }
         var format = query.Format?.Trim();
+        var medium = query.EffectiveMedium;
+        if (medium.HasValue)
+            records = records.Where(record => record.Medium == medium.Value);
         if (format == RecordQuery.UnrecordedFormat)
         {
-            records = records.Where(record => record.Format == null || record.Format.Trim() == "" ||
-                EF.Functions.Collate(record.Format.Trim(), SearchCollation) == Album.VinylFormat);
+            records = records.Where(record => record.Medium == RecordMedium.Vinyl &&
+                (record.Format == null || record.Format.Trim() == "" ||
+                EF.Functions.Collate(record.Format.Trim(), SearchCollation) == Album.VinylFormat));
         }
         else if (!string.IsNullOrEmpty(format) && !string.Equals(format, Album.VinylFormat, StringComparison.OrdinalIgnoreCase))
         {
@@ -97,14 +104,19 @@ public sealed class RecordRepository(RecordContext context)
                 records = records.Where(record => record.Year == year || record.PressingYear == year ||
                     record.Name.Contains(term) || (record.CatalogNumber != null && record.CatalogNumber.Contains(term)));
             else
+            {
+                var mediaTerm = term.All(char.IsLetter) && Enum.TryParse<RecordMedium>(term, true, out var parsedMedium)
+                    && Enum.IsDefined(parsedMedium) ? (RecordMedium?)parsedMedium : null;
                 records = records.Where(record =>
                     EF.Functions.Collate(record.Name, SearchCollation).Contains(term) ||
                     EF.Functions.Collate(record.Artist == null ? record.ArtistName ?? "Uncredited" : record.Artist.Name, SearchCollation).Contains(term) ||
                     (record.Label != null && record.Label.Contains(term)) ||
                     (record.Genre != null && record.Genre.Contains(term)) ||
                     (record.Format != null && record.Format.Contains(term)) ||
+                    (mediaTerm.HasValue && record.Medium == mediaTerm.Value) ||
                     (record.CatalogNumber != null && record.CatalogNumber.Contains(term)) ||
                     (record.Barcode != null && record.Barcode.Contains(term)));
+            }
         }
 
         var ordered = query.Sort switch
@@ -118,7 +130,7 @@ public sealed class RecordRepository(RecordContext context)
 
         var count = await records.CountAsync(cancellationToken);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
-        if (count == 0 && terms.Length > 0)
+        if (count == 0 && allowFuzzyMatch && terms.Length > 0)
         {
             var candidates = await filtered.OrderBy(record => record.Name).ThenBy(record => record.Id)
                 .Take(4000).ToListAsync(cancellationToken);
@@ -135,6 +147,8 @@ public sealed class RecordRepository(RecordContext context)
                 .Take(pageSize).ToList(), similar.Count, fallbackPage, pageSize);
         }
         var page = Math.Clamp(query.Page, 1, Math.Max(1, (int)Math.Ceiling((double)count / pageSize)));
+        if (count == 0)
+            return new RecordPage([], 0, page, pageSize);
         var rows = await ordered.ThenBy(record => record.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -143,14 +157,20 @@ public sealed class RecordRepository(RecordContext context)
         return new RecordPage(rows, count, page, pageSize);
     }
 
+    public async Task<IReadOnlyList<Album>> RecentAsync(int count, CancellationToken cancellationToken) =>
+        await context.Albums.AsNoTracking().Include(record => record.Artist)
+            .Where(record => record.AddedAtUtc.HasValue)
+            .OrderByDescending(record => record.AddedAtUtc).ThenByDescending(record => record.Id)
+            .Take(count).ToListAsync(cancellationToken);
+
     public async Task<CatalogFacets> GetFacetsAsync(CancellationToken cancellationToken)
     {
         var rows = await context.Albums.AsNoTracking()
-            .Select(record => new { record.Year, record.Format, record.Label, record.Genre })
+            .Select(record => new { record.Year, record.Format, record.Label, record.Genre, record.Medium })
             .Distinct().ToListAsync(cancellationToken);
         return new CatalogFacets(rows.Where(row => row.Year >= 1000)
             .Select(row => row.Year!.Value / 10 * 10).Distinct().OrderDescending().ToArray(),
-            Names(rows.Select(row => row.Format?.Trim()).Where(Album.IsDetailedVinylFormat)),
+            Names(rows.Where(row => RecordMedia.HasDetails(row.Medium, row.Format)).Select(row => row.Format?.Trim())),
             Names(rows.Select(row => row.Genre)), Names(rows.Select(row => row.Label)));
     }
 
@@ -214,6 +234,8 @@ public sealed class RecordRepository(RecordContext context)
         record.CatalogNumber = Clean(form.CatalogNumber);
         record.Format = Clean(form.Format);
         record.PressingReviewed = form.Reviewed;
+        if (form.Reviewed)
+            record.PressingEstimated = false;
         return await PersistAsync(record, RecordChange.Conflict, cancellationToken);
     }
 
@@ -256,7 +278,7 @@ public sealed class RecordRepository(RecordContext context)
                 ? (await FindArtistAsync(artistId, cancellationToken))?.Name
                 : artistName;
             var identity = new RecordIdentity(album.Name, credit ?? "", album.Barcode, album.MusicBrainzId, album.DiscogsId);
-            var matches = identity.FindMatches(await SnapshotAsync(cancellationToken));
+            var matches = identity.FindMatches(await SnapshotAsync(cancellationToken), medium: album.Medium);
             if (matches.Length > 0)
             {
                 var review = identity.Review(matches);
@@ -328,6 +350,7 @@ public sealed class RecordRepository(RecordContext context)
         target.Notes = Clean(target.Notes) is null ? Clean(incoming.Notes) : target.Notes;
         if (!target.HasCover && CatalogValidation.IsCoverUrl(incoming.CoverUrl))
             target.CoverUrl = incoming.CoverUrl;
+        target.SpotifyUrl ??= incoming.SpotifyUrl;
 
         var result = await PersistAsync(target, RecordChange.Conflict, cancellationToken);
         if (result == RecordChange.Success)
@@ -368,22 +391,29 @@ public sealed class RecordRepository(RecordContext context)
             return RecordChange.ArtistRequired;
         }
 
-        if (target.Name != album.Name.Trim() || target.ArtistId != artist?.Id ||
+        if (target.Name != album.Name.Trim() || target.ArtistId != artist?.Id || target.Medium != album.Medium ||
             target.PressingYear != album.PressingYear || target.MusicBrainzId != album.MusicBrainzId ||
             target.DiscogsId != album.DiscogsId ||
             target.Label != Clean(album.Label) || target.Country != Clean(album.Country) ||
             target.Format != Clean(album.Format) || target.Barcode != Clean(album.Barcode) ||
             target.CatalogNumber != Clean(album.CatalogNumber))
             target.PressingReviewed = false;
+        if (updating && album.PressingReviewed)
+        {
+            target.PressingReviewed = true;
+            target.PressingEstimated = false;
+        }
 
         target.Name = album.Name.Trim();
         target.ArtistId = artist?.Id;
         target.ArtistName = artist?.Name ?? (preserveLegacyCredit ? target.ArtistName : null);
         target.Year = album.Year;
         target.Kind = album.Kind;
+        target.Medium = album.Medium;
         target.Format = Clean(album.Format);
         target.Notes = Clean(album.Notes);
         target.CoverUrl = Clean(album.CoverUrl);
+        target.SpotifyUrl = SpotifyRelease.Normalize(album.SpotifyUrl);
         target.Label = Clean(album.Label);
         target.Genre = Clean(album.Genre);
         target.Country = Clean(album.Country);

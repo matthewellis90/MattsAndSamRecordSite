@@ -7,7 +7,8 @@ namespace MattsRecords.Controllers;
 
 public sealed class SleeveController(RecordRepository records) : Controller
 {
-    [HttpGet("/records/{id:int}/sleeve/{side:int}/{revision:guid}", Name = "SleeveImage")]
+    [Authorize, HttpGet("/records/{id:int}/sleeve/{side:int}/{revision:guid}", Name = "SleeveImage")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
     public async Task<IActionResult> Image(int id, SleeveSide side, Guid revision, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid || !Enum.IsDefined(side))
@@ -17,7 +18,6 @@ public sealed class SleeveController(RecordRepository records) : Controller
         if (jpeg is null)
             return NotFound();
 
-        Response.Headers.CacheControl = CollectionSession.IsPersonal(User) ? "private, no-store" : "public, max-age=3600";
         return File(jpeg, "image/jpeg");
     }
 
@@ -31,6 +31,7 @@ public sealed class SleeveController(RecordRepository records) : Controller
             Version = Convert.ToBase64String(record.RowVersion),
             CatalogNumber = record.CatalogNumber,
             Format = record.Format,
+            Size = VinylSizing.FromFormat(record.Format),
             Reviewed = record.PressingReviewed
         });
     }
@@ -49,6 +50,9 @@ public sealed class SleeveController(RecordRepository records) : Controller
             ModelState.AddModelError(string.Empty, "Reload this record before saving.");
         if ((form.RemoveFront && form.Front is not null) || (form.RemoveBack && form.Back is not null))
             ModelState.AddModelError(string.Empty, "Choose a replacement or removal for each sleeve.");
+        if (record.Medium != RecordMedium.Vinyl && RecordMedia.FromFormat(form.Format) is RecordMedium specified &&
+            specified != record.Medium)
+            ModelState.AddModelError(nameof(form.Format), "Enter format details for this record’s media.");
 
         if (!ModelState.IsValid)
             return View(nameof(Edit), form);
@@ -58,8 +62,9 @@ public sealed class SleeveController(RecordRepository records) : Controller
         if (!ModelState.IsValid)
             return View(nameof(Edit), form);
 
-        // Forms opened before the format field was added can still save their other changes.
-        if (!ModelState.ContainsKey(nameof(form.Format)))
+        if (record.Medium == RecordMedium.Vinyl && ModelState.ContainsKey(nameof(form.Size)))
+            form.Format = VinylSizing.Apply(form.Size, record.Format);
+        else if (!ModelState.ContainsKey(nameof(form.Format)))
             form.Format = record.Format;
 
         var result = await records.SaveSleevesAsync(id, version, form, front, back, cancellationToken);

@@ -3,6 +3,8 @@
     ViewData["Title"] = !Model.Id.HasValue ? "Add a record" : "Edit record";
     var artists = new SelectList(Model.Artists, nameof(ArtistSummary.Id), nameof(ArtistSummary.Name), Model.ArtistId);
     var cancel = !Model.Id.HasValue ? Url.Action("Index", "Home") : Url.Action("Details", "Album", new { id = Model.Id });
+    var lookupMode = ViewData["LookupMode"] as string ?? "Title";
+    var lookupTerm = lookupMode == "Catalogue" ? Model.CatalogNumber : lookupMode == "Barcode" ? Model.Barcode : null;
 }
 <section class="shell content-page">
     <a class="back-link" href="@cancel">@(!Model.Id.HasValue ? "Collection" : "Record details")</a>
@@ -10,23 +12,28 @@
         <h1>@ViewData["Title"]</h1>
         <section class="lookup-panel" aria-labelledby="pressing-lookup-title" data-lookup="@Url.Action("Lookup", "Album")"
                  data-lookup-details="@Url.Action("LookupDetails", "Album")"
+                 data-initial-lookup="@ViewData["LookupMode"]"
                  data-existing-record="@Url.Action("Details", "Album", new { id = 0 })">
             <h2 id="pressing-lookup-title">Find a pressing</h2>
-            @if (!Model.Id.HasValue)
-            {
-                <div class="barcode-scanner" data-barcode-scanner>
-                    <button type="button" class="button button-accent" id="scan-start">Scan barcode</button>
-                    <div id="scan-camera" hidden>
-                        <video id="scan-preview" playsinline muted aria-label="Barcode scanner camera preview"></video>
-                    </div>
-                    <p class="field-hint" id="scan-status" role="status"></p>
+            <div class="barcode-scanner" data-barcode-scanner>
+                <button type="button" class="button button-accent" id="scan-start">Scan barcode</button>
+                <div id="scan-camera" hidden>
+                    <video id="scan-preview" playsinline muted aria-label="Barcode scanner camera preview"></video>
                 </div>
-            }
-            <div class="field-pair">
-                <div><label for="lookup-field">Look up by</label><select id="lookup-field"><option value="Title">Title or MusicBrainz link</option><option value="Barcode">Barcode</option><option value="Catalogue">Catalogue number</option></select></div>
-                <div><label for="lookup-term">Search value</label><input type="search" id="lookup-term" maxlength="200"></div>
+                <p class="field-hint" id="scan-status" role="status"></p>
             </div>
-            <div><label for="lookup-artist">Artist (optional)</label><input type="text" id="lookup-artist" maxlength="100"></div>
+            <div class="field-pair">
+                <div>
+                    <label for="lookup-field">Look up by</label>
+                    <select id="lookup-field">
+                        <option value="Title" selected="@(lookupMode == "Title")">Title or MusicBrainz link</option>
+                        <option value="Barcode" selected="@(lookupMode == "Barcode")">Barcode</option>
+                        <option value="Catalogue" selected="@(lookupMode == "Catalogue")">Catalogue number</option>
+                    </select>
+                </div>
+                <div><label for="lookup-term">Search value</label><input type="search" id="lookup-term" maxlength="200" value="@lookupTerm"></div>
+            </div>
+            <div><label for="lookup-artist">Artist (optional)</label><input type="text" id="lookup-artist" maxlength="100" value="@ViewData["LookupArtist"]"></div>
             <button type="button" class="button button-solid" id="lookup-submit">Search pressings</button>
             <p class="field-hint" id="lookup-status" role="status"></p>
             <p class="field-hint" id="lookup-source" hidden></p>
@@ -61,9 +68,13 @@
                     <p class="field-hint" id="new-artist-hint">Use this field if the artist is missing from the list.</p>
                 </div>
             }
-            <div><label asp-for="Format"></label><input asp-for="Format" maxlength="100" placeholder="e.g. 12-inch vinyl"></div>
+            <div class="field-pair">
+                <div><label asp-for="Medium"></label><select asp-for="Medium" asp-items="Html.GetEnumSelectList<RecordMedium>()"></select></div>
+                <div><label asp-for="Format"></label><input asp-for="Format" maxlength="100" placeholder="e.g. 12-inch vinyl, 2 CDs, or cassette"></div>
+            </div>
             <div>
                 <label asp-for="CoverUrl"></label><input asp-for="CoverUrl" type="url" maxlength="2048" placeholder="https://">
+                <label asp-for="SpotifyUrl"></label><input asp-for="SpotifyUrl" type="url" maxlength="500" placeholder="https://open.spotify.com/album/…">
                 <img id="lookup-cover" class="lookup-cover" alt="Proposed cover art" hidden>
             </div>
             <fieldset class="pressing-fields">
@@ -78,6 +89,10 @@
                     <div><label asp-for="MusicBrainzId"></label><input asp-for="MusicBrainzId"></div>
                     <div><label asp-for="DiscogsId"></label><input asp-for="DiscogsId" min="1"></div>
                 </div>
+                @if (Model.Id.HasValue)
+                {
+                    <label class="checkbox"><input asp-for="ConfirmPressingReviewed"> I checked these pressing details against my copy</label>
+                }
             </fieldset>
             <div><label asp-for="Notes"></label><textarea asp-for="Notes" rows="5" maxlength="2000"></textarea></div>
             @if (Model.Review is { } review)
@@ -116,9 +131,6 @@
 </section>
 
 @section Scripts {
-    @if (!Model.Id.HasValue)
-    {
-        <script src="~/lib/zxing/zxing-browser.min.js" asp-append-version="true" defer></script>
-        <script src="~/js/barcode-scanner.js" asp-append-version="true" defer></script>
-    }
+    <script src="~/lib/zxing/zxing-browser.min.js" asp-append-version="true" defer></script>
+    <script src="~/js/barcode-scanner.js" asp-append-version="true" defer></script>
 }
